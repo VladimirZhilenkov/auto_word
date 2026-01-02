@@ -3,6 +3,7 @@ Database connection management for SQLite with SQLAlchemy 2.0+
 """
 
 import os
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
@@ -14,8 +15,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from .models import Base
 
 
+def get_app_dir() -> Path:
+    """Get application directory (works for both dev and compiled)."""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        # Use directory where exe is located
+        return Path(sys.executable).parent
+    else:
+        # Running in development
+        return Path(__file__).parent.parent.parent
+
+
 # Default database path
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
+DATA_DIR = get_app_dir() / "data"
 DATABASE_PATH = DATA_DIR / "database.db"
 
 

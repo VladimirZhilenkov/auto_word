@@ -3,6 +3,7 @@ Document generator service for creating Word documents from templates.
 Uses docxtpl (Jinja2-based) for template processing.
 """
 
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -11,6 +12,14 @@ from docxtpl import DocxTemplate
 
 from ..database.models import Listener, Program, ProgramListener
 from .declension import DeclensionService, get_declension_service
+
+
+def get_app_dir() -> Path:
+    """Get application directory (works for both dev and compiled)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).parent.parent.parent
 
 
 class DocumentGenerator:
@@ -30,8 +39,8 @@ class DocumentGenerator:
     
     def __init__(
         self, 
-        templates_dir: Union[str, Path] = "templates",
-        output_dir: Union[str, Path] = "output"
+        templates_dir: Union[str, Path] = None,
+        output_dir: Union[str, Path] = None
     ):
         """
         Initialize the document generator.
@@ -40,10 +49,12 @@ class DocumentGenerator:
             templates_dir: Directory containing Word templates
             output_dir: Directory for generated documents
         """
-        self.templates_dir = Path(templates_dir)
-        self.output_dir = Path(output_dir)
+        app_dir = get_app_dir()
+        self.templates_dir = Path(templates_dir) if templates_dir else app_dir / "templates"
+        self.output_dir = Path(output_dir) if output_dir else app_dir / "docx_files"
         
-        # Ensure output directory exists
+        # Ensure directories exist
+        self.templates_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize declension service
