@@ -1,0 +1,120 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Позволяет запускать вручную
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    
+    - name: Create directories
+      run: |
+        mkdir -p templates
+        mkdir -p docx_files
+      shell: bash
+    
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --name="AutoWord" ^
+          --windowed ^
+          --onefile ^
+          --add-data="templates;templates" ^
+          --hidden-import=PyQt5 ^
+          --hidden-import=PyQt5.QtCore ^
+          --hidden-import=PyQt5.QtGui ^
+          --hidden-import=PyQt5.QtWidgets ^
+          --hidden-import=sqlalchemy ^
+          --hidden-import=sqlalchemy.dialects.sqlite ^
+          --hidden-import=docxtpl ^
+          --hidden-import=jinja2 ^
+          --hidden-import=pandas ^
+          --hidden-import=openpyxl ^
+          --hidden-import=pymorphy3 ^
+          --hidden-import=pymorphy3.units ^
+          --hidden-import=pymorphy3.units.by_analogy ^
+          --hidden-import=pymorphy3.units.by_hyphen ^
+          --hidden-import=pymorphy3.units.by_lookup ^
+          --hidden-import=pymorphy3.units.by_shape ^
+          --hidden-import=pymorphy3.units.unkn ^
+          --hidden-import=dawg2 ^
+          --collect-data=pymorphy3 ^
+          --collect-data=pymorphy3_dicts_ru ^
+          main.py
+      shell: cmd
+    
+    - name: Create distribution package
+      run: |
+        mkdir -p dist/AutoWord_Package
+        cp dist/AutoWord.exe dist/AutoWord_Package/
+        cp -r templates dist/AutoWord_Package/ 2>/dev/null || true
+        mkdir -p dist/AutoWord_Package/docx_files
+        echo "Сгенерированные документы будут сохраняться здесь" > dist/AutoWord_Package/docx_files/README.txt
+      shell: bash
+    
+    - name: Create README for users
+      run: |
+        @"
+        # AutoWord - Генератор документов Word
+        
+        ## Запуск
+        1. Запустите AutoWord.exe
+        2. При первом запуске создастся база данных
+        
+        ## Папки
+        - templates/ - шаблоны документов Word
+        - docx_files/ - сгенерированные документы
+        
+        ## Использование шаблонов
+        Создайте шаблон Word с переменными:
+        - {{ order_number }} - номер приказа
+        - {{ program_name }} - название программы
+        - {{ stream_name }} - поток
+        - {{ hours }} - часы
+        - {{ listener.full_name }} - ФИО слушателя
+        - {{ listener.position }} - должность
+        - {{ listener.court_name }} - название суда
+        - {{ listener.region }} - регион
+        
+        Полный список переменных смотрите в меню "Справка" программы.
+        "@ | Out-File -FilePath dist/AutoWord_Package/README.txt -Encoding utf8
+      shell: powershell
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoWord-Windows
+        path: dist/AutoWord_Package/
+        retention-days: 30
+    
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/AutoWord_Package/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
