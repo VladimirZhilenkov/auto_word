@@ -2,12 +2,12 @@ name: Build Windows Executable
 
 on:
   push:
-    branches: [ main, master ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:  # Позволяет запускать вручную
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -108,13 +108,17 @@ jobs:
         path: dist/AutoWord_Package/
         retention-days: 30
     
+    - name: Create ZIP for Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        cd dist
+        Compress-Archive -Path AutoWord_Package\* -DestinationPath AutoWord-Windows.zip
+      shell: powershell
+    
     - name: Create Release (on tag)
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          dist/AutoWord_Package/*
+        files: dist/AutoWord-Windows.zip
         draft: false
         prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
