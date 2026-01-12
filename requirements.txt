@@ -10,3 +10,7 @@ Jinja2>=3.0.0
 lxml>=4.9.0
 pyinstaller==6.3.0
 
+# Optional: Remote database drivers
+# Uncomment to enable remote database support:
+# psycopg2-binary>=2.9.0  # PostgreSQL
+# pymysql>=1.1.0          # MySQL/MariaDB

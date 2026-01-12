@@ -16,6 +16,8 @@ from .listeners_tab import ListenersTab
 from .programs_tab import ProgramsTab
 from .dialogs import ImportDialog, GenerateDialog
 from .dialogs.order_dialog import OrderGenerateDialog
+from .dialogs.backup_dialog import BackupDialog
+from .dialogs.database_config_dialog import DatabaseConfigDialog
 
 
 class MainWindow(QMainWindow):
@@ -141,6 +143,18 @@ class MainWindow(QMainWindow):
         
         file_menu.addSeparator()
         
+        # Backup action
+        action_backup = QAction("Управление резервными копиями", self)
+        action_backup.triggered.connect(self._on_backup)
+        file_menu.addAction(action_backup)
+        
+        # Database settings action
+        action_db_settings = QAction("Настройки базы данных", self)
+        action_db_settings.triggered.connect(self._on_database_settings)
+        file_menu.addAction(action_db_settings)
+        
+        file_menu.addSeparator()
+        
         # Exit
         action_exit = QAction("Выход", self)
         action_exit.setShortcut(QKeySequence.Quit)
@@ -226,6 +240,22 @@ class MainWindow(QMainWindow):
         
         if dialog.exec_():
             self.statusbar.showMessage("Приказ создан")
+    
+    def _on_backup(self):
+        """Handle backup management action."""
+        dialog = BackupDialog(self)
+        dialog.exec_()
+    
+    def _on_database_settings(self):
+        """Handle database settings action."""
+        dialog = DatabaseConfigDialog(self)
+        dialog.connection_changed.connect(self._on_database_changed)
+        dialog.exec_()
+    
+    def _on_database_changed(self):
+        """Handle database connection change."""
+        self._refresh_all()
+        self.statusbar.showMessage("База данных переключена")
     
     def _on_add_listener(self):
         """Handle add listener action."""

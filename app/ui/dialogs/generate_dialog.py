@@ -3,6 +3,9 @@ Document generation dialog.
 """
 
 import os
+import re
+import zipfile
+import shutil
 from datetime import datetime, date
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -72,10 +75,19 @@ class GenerateDialog(QDialog):
         self._load_templates()
         template_layout.addRow("Выберите шаблон:", self.combo_template)
         
-        # Refresh templates button
+        # Template buttons row
+        template_buttons = QHBoxLayout()
         btn_refresh_templates = QPushButton("Обновить список")
         btn_refresh_templates.clicked.connect(self._load_templates)
-        template_layout.addRow("", btn_refresh_templates)
+        template_buttons.addWidget(btn_refresh_templates)
+        
+        btn_fix_template = QPushButton("🔧 Исправить шаблон")
+        btn_fix_template.setToolTip("Добавить цикл для списка слушателей (если отсутствует)")
+        btn_fix_template.clicked.connect(self._fix_template_loop)
+        template_buttons.addWidget(btn_fix_template)
+        
+        template_buttons.addStretch()
+        template_layout.addRow("", template_buttons)
         
         layout.addWidget(template_group)
         
@@ -258,6 +270,77 @@ class GenerateDialog(QDialog):
                 "В папке templates/ не найдено шаблонов.\n"
                 "Поместите файлы .docx в папку templates/"
             )
+    
+    def _fix_template_loop(self):
+        """Add {% for listener in listeners %} loop to template if missing."""
+        template_name = self.combo_template.currentText()
+        if not template_name or template_name == "-- Нет шаблонов --":
+            QMessageBox.warning(self, "Предупреждение", "Выберите шаблон")
+            return
+        
+        tpl_path = self.generator.templates_dir / template_name
+        
+        if not tpl_path.exists():
+            QMessageBox.critical(self, "Ошибка", f"Файл шаблона не найден: {tpl_path}")
+            return
+        
+        try:
+            with zipfile.ZipFile(tpl_path, 'r') as z:
+                xml = z.read('word/document.xml').decode('utf-8')
+            
+            # Check if loop already exists
+            if '{% for listener' in xml:
+                QMessageBox.information(
+                    self, "Информация", 
+                    "✅ Цикл уже есть в шаблоне.\nШаблон готов к использованию."
+                )
+                return
+            
+            # Find table row with listener or loop variables
+            tr_pattern = r'(<w:tr\b[^>]*>.*?</w:tr>)'
+            matches = list(re.finditer(tr_pattern, xml, re.DOTALL))
+            
+            found = False
+            for match in matches:
+                tr_content = match.group(1)
+                if 'loop' in tr_content or 'listener' in tr_content:
+                    new_tr = '{% for listener in listeners %}' + tr_content + '{% endfor %}'
+                    xml = xml.replace(tr_content, new_tr, 1)
+                    found = True
+                    break
+            
+            if not found:
+                QMessageBox.warning(
+                    self, "Предупреждение",
+                    "Не найдена строка таблицы с переменными listener или loop.\n\n"
+                    "Убедитесь, что в шаблоне есть строка таблицы с переменными:\n"
+                    "• {{ loop.index }}\n"
+                    "• {{ listener.full_name }}\n"
+                    "• {{ listener.position }}\n"
+                    "• и т.д."
+                )
+                return
+            
+            # Save modified template
+            tmp_path = str(tpl_path) + '.tmp'
+            with zipfile.ZipFile(tpl_path, 'r') as zin:
+                with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                    for item in zin.infolist():
+                        if item.filename == 'word/document.xml':
+                            zout.writestr(item, xml.encode('utf-8'))
+                        else:
+                            zout.writestr(item, zin.read(item.filename))
+            
+            shutil.move(tmp_path, tpl_path)
+            
+            QMessageBox.information(
+                self, "Успех",
+                f"✅ Цикл добавлен в шаблон!\n\n"
+                f"Теперь шаблон '{template_name}' готов к генерации документов со списком слушателей."
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка при исправлении шаблона:\n{e}")
     
     def _load_data(self):
         """Load listeners and programs from database."""

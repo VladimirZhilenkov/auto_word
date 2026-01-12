@@ -26,11 +26,13 @@ class ListenersTab(QWidget):
     # Table column configuration
     COLUMNS = [
         ('id', 'ID', 50),
-        ('full_name', 'ФИО', 250),
-        ('position', 'Должность', 200),
-        ('workplace', 'Место работы', 250),
-        ('region', 'Субъект РФ', 150),
-        ('notes', 'Примечания', 150),
+        ('full_name', 'ФИО', 220),
+        ('position', 'Должность', 150),
+        ('workplace', 'Место работы', 200),
+        ('region', 'Субъект РФ', 120),
+        ('mobile_phone', 'Телефон', 120),
+        ('email', 'Email', 150),
+        ('notes', 'Примечания', 100),
     ]
     
     def __init__(self, parent: Optional[QWidget] = None):

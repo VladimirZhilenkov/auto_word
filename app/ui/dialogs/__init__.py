@@ -6,6 +6,8 @@ from .import_dialog import ImportDialog
 from .generate_dialog import GenerateDialog
 from .program_listeners_dialog import ProgramListenersDialog
 from .template_help_dialog import TemplateHelpDialog
+from .backup_dialog import BackupDialog
+from .database_config_dialog import DatabaseConfigDialog
 
 __all__ = [
     'ListenerFormDialog',
@@ -14,4 +16,6 @@ __all__ = [
     'GenerateDialog',
     'ProgramListenersDialog',
     'TemplateHelpDialog',
+    'BackupDialog',
+    'DatabaseConfigDialog',
 ]

@@ -10,10 +10,11 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QPushButton, QLabel, QGroupBox, QMessageBox,
     QFileDialog, QComboBox, QLineEdit, QTextEdit,
-    QRadioButton, QButtonGroup, QProgressBar
+    QRadioButton, QButtonGroup, QProgressBar, QCheckBox
 )
 
 from ...services.excel_importer import ExcelImporter
+from ...services.backup_manager import BackupManager
 
 
 class ImportDialog(QDialog):
@@ -28,6 +29,7 @@ class ImportDialog(QDialog):
         self.file_path: Optional[str] = None
         self.sheet_names = []
         self.importer = ExcelImporter()
+        self.backup_manager = BackupManager()
         
         self._setup_ui()
     
@@ -83,6 +85,11 @@ class ImportDialog(QDialog):
         sheet_layout.addRow("Выберите лист:", self.combo_sheet)
         
         layout.addWidget(sheet_group)
+        
+        # Backup checkbox
+        self.checkbox_backup = QCheckBox("Создать резервную копию перед импортом")
+        self.checkbox_backup.setChecked(True)
+        layout.addWidget(self.checkbox_backup)
         
         # Progress
         self.progress_bar = QProgressBar()
@@ -179,6 +186,11 @@ class ImportDialog(QDialog):
         self.progress_bar.setRange(0, 0)  # Indeterminate
         self.btn_import.setEnabled(False)
         
+        # Create backup if requested
+        backup_path = None
+        if self.checkbox_backup.isChecked():
+            backup_path = self.backup_manager.auto_backup("Auto-backup before import")
+        
         try:
             if self.radio_listeners.isChecked():
                 result = self.importer.import_listeners(
@@ -194,7 +206,7 @@ class ImportDialog(QDialog):
                 import_type = "программ"
             
             # Display results
-            self._display_results(result, import_type)
+            self._display_results(result, import_type, backup_path)
             
         except Exception as e:
             QMessageBox.critical(
@@ -206,9 +218,12 @@ class ImportDialog(QDialog):
             self.progress_bar.setVisible(False)
             self.btn_import.setEnabled(True)
     
-    def _display_results(self, result: dict, import_type: str):
+    def _display_results(self, result: dict, import_type: str, backup_path: Optional[str] = None):
         """Display import results."""
         text = f"=== Результаты импорта {import_type} ===\n\n"
+        
+        if backup_path:
+            text += f"📦 Резервная копия: {Path(backup_path).name}\n\n"
         
         if result['success']:
             text += f"✓ Импортировано: {result['imported']}\n"

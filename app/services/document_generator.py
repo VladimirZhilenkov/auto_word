@@ -12,6 +12,7 @@ from docxtpl import DocxTemplate
 
 from ..database.models import Listener, Program, ProgramListener
 from .declension import DeclensionService, get_declension_service
+from .document_registration import DocumentRegistrationService
 
 
 def get_app_dir() -> Path:
@@ -59,6 +60,10 @@ class DocumentGenerator:
         
         # Initialize declension service
         self.declension = get_declension_service()
+        
+        # Initialize document registration service
+        self.registration_service = DocumentRegistrationService()
+        self.enable_registration = True  # Can be disabled if needed
     
     def get_available_templates(self) -> List[str]:
         """
@@ -136,6 +141,21 @@ class DocumentGenerator:
         # Save document
         doc.save(output_path)
         
+        # Register document with automatic numbering
+        if self.enable_registration:
+            doc_type = self._determine_document_type(template_name)
+            listener_name = f"{listener.last_name} {listener.first_name}"
+            if listener.middle_name:
+                listener_name += f" {listener.middle_name}"
+            
+            self.registration_service.register_document(
+                document_type=doc_type,
+                document_path=str(output_path),
+                listener_name=listener_name,
+                listener_id=listener.id,
+                program_id=program.id if program else None
+            )
+        
         return str(output_path)
     
     def generate_for_listener_dict(
@@ -192,6 +212,21 @@ class DocumentGenerator:
         # Save document
         doc.save(output_path)
         
+        # Register document with automatic numbering
+        if self.enable_registration:
+            doc_type = self._determine_document_type(template_name)
+            listener_name = f"{listener_data.get('last_name', '')} {listener_data.get('first_name', '')}"
+            if listener_data.get('middle_name'):
+                listener_name += f" {listener_data.get('middle_name')}"
+            
+            self.registration_service.register_document(
+                document_type=doc_type,
+                document_path=str(output_path),
+                listener_name=listener_name.strip(),
+                listener_id=listener_data.get('id'),
+                program_id=program_data.get('id') if program_data else None
+            )
+        
         return str(output_path)
     
     def _prepare_context_from_dict(
@@ -216,8 +251,48 @@ class DocumentGenerator:
         context['order_number'] = order_number
         context['position'] = listener_data.get('position') or ''
         context['workplace'] = listener_data.get('workplace') or ''
+        context['court_name'] = listener_data.get('workplace') or ''  # Alias for templates
         context['region'] = listener_data.get('region') or ''
         context['notes'] = listener_data.get('notes') or ''
+        
+        # Contact information
+        context['mobile_phone'] = listener_data.get('mobile_phone') or ''
+        context['work_phone'] = listener_data.get('work_phone') or ''
+        context['email'] = listener_data.get('email') or ''
+        
+        # Birth date
+        birth_date = listener_data.get('birth_date')
+        if birth_date:
+            if hasattr(birth_date, 'strftime'):
+                context['birth_date'] = birth_date.strftime("%d.%m.%Y")
+            else:
+                context['birth_date'] = str(birth_date)
+        else:
+            context['birth_date'] = ''
+        
+        # Passport data
+        context['passport_series_number'] = listener_data.get('passport_series_number') or ''
+        passport_issue_date = listener_data.get('passport_issue_date')
+        if passport_issue_date:
+            if hasattr(passport_issue_date, 'strftime'):
+                context['passport_issue_date'] = passport_issue_date.strftime("%d.%m.%Y")
+            else:
+                context['passport_issue_date'] = str(passport_issue_date)
+        else:
+            context['passport_issue_date'] = ''
+        context['passport_issued_by'] = listener_data.get('passport_issued_by') or ''
+        context['passport_department_code'] = listener_data.get('passport_department_code') or ''
+        
+        # Addresses
+        context['registration_address'] = listener_data.get('registration_address') or ''
+        context['actual_address'] = listener_data.get('actual_address') or ''
+        
+        # Identifiers
+        context['snils'] = listener_data.get('snils') or ''
+        context['inn'] = listener_data.get('inn') or ''
+        
+        # Personal data consent
+        context['personal_data_consent'] = 'Да' if listener_data.get('personal_data_consent') else 'Нет'
         
         # Add program context
         if program_data:
@@ -540,6 +615,37 @@ class DocumentGenerator:
         context['region'] = listener.region or ''
         context['notes'] = listener.notes or ''
         
+        # Contact information
+        context['mobile_phone'] = listener.mobile_phone or ''
+        context['work_phone'] = listener.work_phone or ''
+        context['email'] = listener.email or ''
+        
+        # Birth date
+        if listener.birth_date:
+            context['birth_date'] = listener.birth_date.strftime("%d.%m.%Y")
+        else:
+            context['birth_date'] = ''
+        
+        # Passport data
+        context['passport_series_number'] = listener.passport_series_number or ''
+        if listener.passport_issue_date:
+            context['passport_issue_date'] = listener.passport_issue_date.strftime("%d.%m.%Y")
+        else:
+            context['passport_issue_date'] = ''
+        context['passport_issued_by'] = listener.passport_issued_by or ''
+        context['passport_department_code'] = listener.passport_department_code or ''
+        
+        # Addresses
+        context['registration_address'] = listener.registration_address or ''
+        context['actual_address'] = listener.actual_address or ''
+        
+        # Identifiers
+        context['snils'] = listener.snils or ''
+        context['inn'] = listener.inn or ''
+        
+        # Personal data consent
+        context['personal_data_consent'] = 'Да' if listener.personal_data_consent else 'Нет'
+        
         return context
     
     def _prepare_program_context(self, program: Program) -> Dict[str, Any]:
@@ -583,6 +689,36 @@ class DocumentGenerator:
         result = result.strip(' .')
         
         return result[:50] if result else "document"
+    
+    def _determine_document_type(self, template_name: str) -> str:
+        """
+        Determine document type from template name for registration.
+        
+        Args:
+            template_name: Name of the template file
+        
+        Returns:
+            Document type string (enrollment, admission, graduation, order, other)
+        """
+        name_lower = template_name.lower()
+        
+        # Check for enrollment (зачисление)
+        if any(word in name_lower for word in ['зачисл', 'enrollment', 'enroll']):
+            return 'enrollment'
+        
+        # Check for admission (допуск)
+        if any(word in name_lower for word in ['допуск', 'admission', 'admit']):
+            return 'admission'
+        
+        # Check for graduation/expulsion (отчисление)
+        if any(word in name_lower for word in ['отчисл', 'graduation', 'expuls', 'выпуск']):
+            return 'graduation'
+        
+        # Check for order (приказ)
+        if any(word in name_lower for word in ['приказ', 'order', 'распоряж']):
+            return 'order'
+        
+        return 'other'
     
     def get_template_variables(self, template_name: str) -> List[str]:
         """

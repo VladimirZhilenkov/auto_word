@@ -71,9 +71,12 @@ ehthumbs.db
 Desktop.ini
 
 # Project specific
-data/database.db
+data/
 output/*.docx
 *.log
+listener_data.xlsx
+docx_files/
+templates
 
 # Temporary files
 *.tmp

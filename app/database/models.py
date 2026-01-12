@@ -71,10 +71,35 @@ class Listener(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)  # Имя
     middle_name: Mapped[Optional[str]] = mapped_column(String(100))  # Отчество
     
+    # Дата рождения
+    birth_date: Mapped[Optional[date]] = mapped_column(Date)  # Дата рождения
+    
     # Рабочая информация
     position: Mapped[Optional[str]] = mapped_column(String(255))  # Должность
     workplace: Mapped[Optional[str]] = mapped_column(String(255))  # Место работы
     region: Mapped[Optional[str]] = mapped_column(String(255))  # Субъект РФ
+    
+    # Контактная информация
+    mobile_phone: Mapped[Optional[str]] = mapped_column(String(50))  # Мобильный телефон
+    work_phone: Mapped[Optional[str]] = mapped_column(String(50))  # Рабочий телефон
+    email: Mapped[Optional[str]] = mapped_column(String(255))  # Электронная почта
+    
+    # Паспортные данные
+    passport_series_number: Mapped[Optional[str]] = mapped_column(String(20))  # Серия и номер паспорта
+    passport_issue_date: Mapped[Optional[date]] = mapped_column(Date)  # Дата выдачи
+    passport_issued_by: Mapped[Optional[str]] = mapped_column(String(500))  # Кем выдан
+    passport_department_code: Mapped[Optional[str]] = mapped_column(String(20))  # Код подразделения
+    
+    # Адреса
+    registration_address: Mapped[Optional[str]] = mapped_column(String(500))  # Адрес регистрации с индексом
+    actual_address: Mapped[Optional[str]] = mapped_column(String(500))  # Фактический адрес с индексом
+    
+    # Идентификационные данные
+    snils: Mapped[Optional[str]] = mapped_column(String(20))  # СНИЛС
+    inn: Mapped[Optional[str]] = mapped_column(String(20))  # ИНН
+    
+    # Согласие на обработку персональных данных
+    personal_data_consent: Mapped[bool] = mapped_column(Integer, default=False)  # Согласие на обработку ПД
     
     # Метаданные
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -225,3 +250,42 @@ class Program(Base):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+class DocumentRegister(Base):
+    """
+    Document register entry for tracking generated documents.
+    Registers documents with automatic sequential numbering by type.
+    """
+    __tablename__ = 'document_register'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)  # Sequential number per type
+    document_type: Mapped[str] = mapped_column(
+        String(50), 
+        nullable=False
+    )  # enrollment, admission, graduation, order
+    document_path: Mapped[str] = mapped_column(
+        String(500), 
+        nullable=False
+    )  # Path to generated document
+    listener_id: Mapped[Optional[int]] = mapped_column(Integer)  # Associated listener
+    program_id: Mapped[Optional[int]] = mapped_column(Integer)  # Associated program
+    listener_name: Mapped[str] = mapped_column(
+        String(255), 
+        nullable=False
+    )  # Full name for reference
+    registration_date: Mapped[date] = mapped_column(
+        Date, 
+        nullable=False, 
+        default=date.today
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    extra_data: Mapped[Optional[str]] = mapped_column(Text)  # JSON metadata
+    
+    __table_args__ = (
+        Index('ix_register_type_number', 'document_type', 'number'),
+        Index('ix_register_date', 'registration_date'),
+    )
+    
+    def __repr__(self):
+        return f"<DocumentRegister(number={self.number}, type={self.document_type})>"

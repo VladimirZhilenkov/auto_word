@@ -27,8 +27,10 @@ def setup_environment():
     # Create required directories
     directories = [
         APP_ROOT / "data",
+        APP_ROOT / "data" / "backups",  # For database backups
         APP_ROOT / "docx_files",
         APP_ROOT / "output",
+        APP_ROOT / "templates",
     ]
     
     for directory in directories:
@@ -36,9 +38,28 @@ def setup_environment():
 
 
 def init_database():
-    """Initialize the database."""
-    from app.database.connection import init_database as db_init
+    """Initialize the database from saved configuration or defaults."""
+    from app.database.connection import init_from_config, init_database as db_init
+    from app.database.config import get_config_manager
     
+    config_manager = get_config_manager()
+    config = config_manager.load_config()
+    
+    # Check if we have a saved configuration
+    if config.db_type != "sqlite" or config.sqlite_path:
+        try:
+            init_from_config()
+            print(f"Database initialized from config: {config.db_type}")
+            if config.db_type == "sqlite":
+                print(f"  Path: {config.sqlite_path}")
+            else:
+                print(f"  Host: {config.host}:{config.port}/{config.database}")
+            return
+        except Exception as e:
+            print(f"Failed to initialize from config: {e}")
+            print("Falling back to default SQLite database")
+    
+    # Default SQLite initialization
     db_path = APP_ROOT / "data" / "database.db"
     db_init(db_path)
     print(f"Database initialized at: {db_path}")

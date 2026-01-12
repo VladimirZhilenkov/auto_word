@@ -200,6 +200,34 @@ class TemplateHelpDialog(QDialog):
             <tr><td><code>{{ region }}</code></td><td>Регион</td><td>Иркутская область</td></tr>
         </table>
         
+        <h3>📞 Контактные данные слушателя</h3>
+        <table>
+            <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
+            <tr><td><code>{{ birth_date }}</code></td><td>Дата рождения</td><td>15.03.1985</td></tr>
+            <tr><td><code>{{ mobile_phone }}</code></td><td>Мобильный телефон</td><td>+7 (999) 123-45-67</td></tr>
+            <tr><td><code>{{ work_phone }}</code></td><td>Рабочий телефон</td><td>+7 (495) 123-45-67</td></tr>
+            <tr><td><code>{{ email }}</code></td><td>Электронная почта</td><td>ivanov@example.com</td></tr>
+        </table>
+        
+        <h3>🪪 Паспортные данные слушателя</h3>
+        <table>
+            <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
+            <tr><td><code>{{ passport_series_number }}</code></td><td>Серия и номер паспорта</td><td>1234 567890</td></tr>
+            <tr><td><code>{{ passport_issue_date }}</code></td><td>Дата выдачи паспорта</td><td>25.12.2010</td></tr>
+            <tr><td><code>{{ passport_issued_by }}</code></td><td>Кем выдан паспорт</td><td>ОВД Ленинского района г. Иркутска</td></tr>
+            <tr><td><code>{{ passport_department_code }}</code></td><td>Код подразделения</td><td>380-015</td></tr>
+        </table>
+        
+        <h3>🏠 Адреса и идентификаторы слушателя</h3>
+        <table>
+            <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
+            <tr><td><code>{{ registration_address }}</code></td><td>Адрес регистрации</td><td>664025, г. Иркутск, ул. Ленина, д. 10, кв. 5</td></tr>
+            <tr><td><code>{{ actual_address }}</code></td><td>Фактический адрес</td><td>664025, г. Иркутск, ул. Ленина, д. 10, кв. 5</td></tr>
+            <tr><td><code>{{ snils }}</code></td><td>СНИЛС</td><td>123-456-789 00</td></tr>
+            <tr><td><code>{{ inn }}</code></td><td>ИНН</td><td>123456789012</td></tr>
+            <tr><td><code>{{ personal_data_consent }}</code></td><td>Согласие на обработку данных</td><td>Да / Нет</td></tr>
+        </table>
+        
         <h3>📆 Служебные переменные</h3>
         <table>
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
