@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 from ..database.connection import DatabaseSession
-from ..database.models import Listener
+from ..database.models import Listener, ProgramListener
 from .dialogs import ListenerFormDialog
 
 
@@ -30,6 +30,7 @@ class ListenersTab(QWidget):
         ('position', 'Должность', 150),
         ('workplace', 'Место работы', 200),
         ('region', 'Субъект РФ', 120),
+        ('program', 'Программа', 150),
         ('mobile_phone', 'Телефон', 120),
         ('email', 'Email', 150),
         ('notes', 'Примечания', 100),
@@ -171,6 +172,13 @@ class ListenersTab(QWidget):
                 item = QStandardItem(str(listener.id))
             elif col_name == 'full_name':
                 item = QStandardItem(listener.full_name)
+            elif col_name == 'program':
+                # Get program short name
+                program_name = ""
+                if listener.programs:
+                    prog = listener.programs[0]
+                    program_name = prog.program_short_name or prog.program_name[:30]
+                item = QStandardItem(program_name)
             else:
                 value = getattr(listener, col_name, '') or ''
                 item = QStandardItem(str(value))
@@ -206,11 +214,22 @@ class ListenersTab(QWidget):
         
         if dialog.exec_():
             data = dialog.get_data()
+            program_id = data.pop('program_id', None)
             
             try:
                 with DatabaseSession() as session:
                     listener = Listener(**data)
                     session.add(listener)
+                    session.flush()  # Get the ID
+                    
+                    # Associate with program if selected
+                    if program_id:
+                        assoc = ProgramListener(
+                            program_id=program_id,
+                            listener_id=listener.id
+                        )
+                        session.add(assoc)
+                    
                     session.commit()
                 
                 self.refresh_data()
@@ -247,9 +266,24 @@ class ListenersTab(QWidget):
                 
                 if dialog.exec_():
                     data = dialog.get_data()
+                    program_id = data.pop('program_id', None)
                     
                     for key, value in data.items():
                         setattr(listener, key, value)
+                    
+                    # Update program association
+                    # First, remove existing associations
+                    session.query(ProgramListener).filter(
+                        ProgramListener.listener_id == listener.id
+                    ).delete()
+                    
+                    # Add new association if selected
+                    if program_id:
+                        assoc = ProgramListener(
+                            program_id=program_id,
+                            listener_id=listener.id
+                        )
+                        session.add(assoc)
                     
                     session.commit()
                     self.refresh_data()

@@ -1,39 +1,45 @@
 """
 Listener form dialog for adding/editing listeners.
 Extended with personal data fields including passport, contacts, and addresses.
+Includes program selection with ability to add new programs.
 """
 
 from datetime import date
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QTextEdit, QPushButton, QLabel, QGroupBox,
     QMessageBox, QScrollArea, QWidget, QCheckBox, QDateEdit,
-    QTabWidget
+    QTabWidget, QComboBox, QInputDialog
 )
 
-from ...database.models import Listener
+from ...database.models import Listener, Program
+from ...database.connection import DatabaseSession
 
 
 class ListenerFormDialog(QDialog):
     """
     Dialog for adding or editing a listener.
-    Includes extended personal data fields.
+    Includes extended personal data fields and program selection.
     """
     
     def __init__(
         self, 
         parent=None, 
-        listener: Optional[Listener] = None
+        listener: Optional[Listener] = None,
+        default_program_id: Optional[int] = None
     ):
         super().__init__(parent)
         
         self.listener = listener
         self.is_edit_mode = listener is not None
+        self.default_program_id = default_program_id
+        self.selected_program_id: Optional[int] = None
         
         self._setup_ui()
+        self._load_programs()
         
         if self.is_edit_mode:
             self._load_data()
@@ -147,6 +153,23 @@ class ListenerFormDialog(QDialog):
         work_layout.addRow("Субъект РФ:", self.edit_region)
         
         layout.addWidget(work_group)
+        
+        # Program group
+        program_group = QGroupBox("Программа обучения")
+        program_layout = QHBoxLayout(program_group)
+        
+        self.combo_program = QComboBox()
+        self.combo_program.setMinimumWidth(300)
+        self.combo_program.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        program_layout.addWidget(self.combo_program, stretch=1)
+        
+        self.btn_add_program = QPushButton("+")
+        self.btn_add_program.setMaximumWidth(30)
+        self.btn_add_program.setToolTip("Добавить новую программу")
+        self.btn_add_program.clicked.connect(self._on_add_program)
+        program_layout.addWidget(self.btn_add_program)
+        
+        layout.addWidget(program_group)
         
         # Notes group
         notes_group = QGroupBox("Примечания")
@@ -266,6 +289,114 @@ class ListenerFormDialog(QDialog):
         
         return widget
     
+    def _load_programs(self):
+        """Load programs into combo box."""
+        self.combo_program.clear()
+        self.combo_program.addItem("-- Без программы --", None)
+        
+        try:
+            with DatabaseSession() as session:
+                programs = session.query(Program).order_by(Program.program_name).all()
+                
+                for program in programs:
+                    # Use short name if available, otherwise truncate full name
+                    if program.program_short_name:
+                        display = program.program_short_name
+                    else:
+                        display = program.program_name[:60] + "..." if len(program.program_name) > 60 else program.program_name
+                    
+                    self.combo_program.addItem(display, program.id)
+                
+                # Set default program if specified
+                if self.default_program_id:
+                    for i in range(self.combo_program.count()):
+                        if self.combo_program.itemData(i) == self.default_program_id:
+                            self.combo_program.setCurrentIndex(i)
+                            break
+                            
+        except Exception as e:
+            print(f"Error loading programs: {e}")
+    
+    def _on_add_program(self):
+        """Add a new program via quick dialog."""
+        # First ask for short name
+        short_name, ok1 = QInputDialog.getText(
+            self,
+            "Новая программа",
+            "Краткое наименование программы:",
+            QLineEdit.Normal,
+            ""
+        )
+        
+        if not ok1 or not short_name.strip():
+            return
+        
+        short_name = short_name.strip()
+        
+        # Then ask for full name (optional, defaults to short name)
+        full_name, ok2 = QInputDialog.getText(
+            self,
+            "Новая программа",
+            "Полное наименование программы\n(оставьте пустым для использования краткого):",
+            QLineEdit.Normal,
+            short_name
+        )
+        
+        if not ok2:
+            return
+        
+        full_name = full_name.strip() or short_name
+        
+        try:
+            with DatabaseSession() as session:
+                # Check if program with this short name already exists
+                existing = session.query(Program).filter(
+                    Program.program_short_name == short_name
+                ).first()
+                
+                if existing:
+                    QMessageBox.warning(
+                        self,
+                        "Программа существует",
+                        f"Программа с кратким названием '{short_name}' уже существует."
+                    )
+                    # Select existing program
+                    for i in range(self.combo_program.count()):
+                        if self.combo_program.itemData(i) == existing.id:
+                            self.combo_program.setCurrentIndex(i)
+                            break
+                    return
+                
+                # Create new program
+                new_program = Program(
+                    program_name=full_name,
+                    program_short_name=short_name
+                )
+                session.add(new_program)
+                session.commit()
+                
+                # Reload programs and select the new one
+                new_id = new_program.id
+                self._load_programs()
+                
+                for i in range(self.combo_program.count()):
+                    if self.combo_program.itemData(i) == new_id:
+                        self.combo_program.setCurrentIndex(i)
+                        break
+                
+                QMessageBox.information(
+                    self,
+                    "Программа создана",
+                    f"Программа '{short_name}' успешно создана."
+                )
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось создать программу: {e}"
+            )
+    
     def _load_data(self):
         """Load existing listener data into form."""
         if not self.listener:
@@ -288,6 +419,14 @@ class ListenerFormDialog(QDialog):
         self.edit_workplace.setText(self.listener.workplace or '')
         self.edit_region.setText(self.listener.region or '')
         self.edit_notes.setPlainText(self.listener.notes or '')
+        
+        # Load listener's program (first one if multiple)
+        if self.listener.programs:
+            program_id = self.listener.programs[0].id
+            for i in range(self.combo_program.count()):
+                if self.combo_program.itemData(i) == program_id:
+                    self.combo_program.setCurrentIndex(i)
+                    break
         
         # Contacts
         self.edit_mobile_phone.setText(self.listener.mobile_phone or '')
@@ -389,6 +528,9 @@ class ListenerFormDialog(QDialog):
             
             # Consent
             'personal_data_consent': self.chk_consent.isChecked(),
+            
+            # Program
+            'program_id': self.combo_program.currentData(),
         }
         
         # Handle dates
