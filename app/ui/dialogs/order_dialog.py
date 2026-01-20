@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 from ...database.connection import DatabaseSession
 from ...database.models import Listener, Program
 from ...services.document_generator import DocumentGenerator
+from ...services.order_journal_service import OrderJournalService
 
 
 class OrderGenerateDialog(QDialog):
@@ -44,6 +45,7 @@ class OrderGenerateDialog(QDialog):
         self.selected_listeners = selected_listeners or []
         self.selected_program = selected_program
         self.generator = DocumentGenerator()
+        self.journal_service = OrderJournalService()
         
         self._all_listeners: List[Dict[str, Any]] = []
         self._all_programs: List[Dict[str, Any]] = []
@@ -67,6 +69,7 @@ class OrderGenerateDialog(QDialog):
         self.combo_order_type = QComboBox()
         for key, name in self.ORDER_TYPES.items():
             self.combo_order_type.addItem(name, key)
+        self.combo_order_type.currentIndexChanged.connect(self._update_next_number)
         type_layout.addRow("Тип:", self.combo_order_type)
         
         layout.addWidget(type_group)
@@ -75,9 +78,17 @@ class OrderGenerateDialog(QDialog):
         details_group = QGroupBox("Реквизиты приказа")
         details_layout = QFormLayout(details_group)
         
+        # Order number with hint
+        number_layout = QVBoxLayout()
         self.edit_order_number = QLineEdit()
         self.edit_order_number.setPlaceholderText("Например: 111")
-        details_layout.addRow("Номер приказа:", self.edit_order_number)
+        number_layout.addWidget(self.edit_order_number)
+        
+        self.label_number_hint = QLabel("")
+        self.label_number_hint.setStyleSheet("color: gray; font-size: 10px;")
+        number_layout.addWidget(self.label_number_hint)
+        
+        details_layout.addRow("Номер приказа:", number_layout)
         
         self.edit_order_date = QDateEdit()
         self.edit_order_date.setCalendarPopup(True)
@@ -211,6 +222,21 @@ class OrderGenerateDialog(QDialog):
                 self, "Ошибка",
                 f"Ошибка загрузки данных: {e}"
             )
+        
+        # Pre-fetch next order number
+        self._update_next_number()
+    
+    def _update_next_number(self):
+        """Fetch and display next order number for selected type."""
+        order_type = self.combo_order_type.currentData()
+        try:
+            next_num = self.journal_service.get_next_order_number(order_type)
+            self.label_number_hint.setText(f"Следующий номер в журнале: №{next_num}")
+            # Autofill if empty
+            if not self.edit_order_number.text().strip():
+                self.edit_order_number.setText(str(next_num))
+        except Exception:
+            self.label_number_hint.setText("")
     
     def _populate_listeners_list(self):
         """Populate the listeners list widget."""
@@ -319,9 +345,25 @@ class OrderGenerateDialog(QDialog):
             
             self.text_results.append(f"\n✓ Документ создан: {file_path}")
             
+            # Register in journal
+            try:
+                assigned_num = self.journal_service.register_order(
+                    journal_type=order_type,
+                    title=f"Приказ {self.ORDER_TYPES[order_type]} №{order_number}",
+                    program_name=self.edit_program_name.text().strip() or None,
+                    executor="",  # Could add field if needed
+                    order_date=order_date,
+                    notes=f"Слушателей: {len(selected_listeners)}",
+                    document_path=file_path,
+                    order_number=int(order_number),
+                )
+                self.text_results.append(f"✓ Зарегистрирован в журнале под номером: {assigned_num}")
+            except Exception as e:
+                self.text_results.append(f"⚠ Предупреждение: не удалось зарегистрировать в журнале: {e}")
+            
             QMessageBox.information(
                 self, "Успех",
-                f"Приказ создан!\n\nФайл: {Path(file_path).name}\nПапка: {self.generator.output_dir}"
+                f"Приказ создан и зарегистрирован в журнале!\n\nФайл: {Path(file_path).name}\nПапка: {self.generator.output_dir}"
             )
             
             if self.check_open_folder.isChecked():

@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 
 from .listeners_tab import ListenersTab
 from .programs_tab import ProgramsTab
+from .journals_tab import JournalsTab
 from .dialogs import ImportDialog, GenerateDialog
 from .dialogs.order_dialog import OrderGenerateDialog
 from .dialogs.backup_dialog import BackupDialog
@@ -53,10 +54,12 @@ class MainWindow(QMainWindow):
         # Create tabs
         self.listeners_tab = ListenersTab(self)
         self.programs_tab = ProgramsTab(self)
+        self.journals_tab = JournalsTab(self)
         
         # Add tabs
         self.tab_widget.addTab(self.listeners_tab, "Слушатели")
         self.tab_widget.addTab(self.programs_tab, "Программы")
+        self.tab_widget.addTab(self.journals_tab, "Журналы")
         
         # Connect tab change signal
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
@@ -131,6 +134,13 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.action_generate_order)
         file_menu.addSeparator()
         
+        # Export journals action
+        action_export_journals = QAction("Экспорт журналов", self)
+        action_export_journals.triggered.connect(self._export_journals)
+        file_menu.addAction(action_export_journals)
+        
+        file_menu.addSeparator()
+        
         # Open templates folder
         action_open_templates = QAction("Открыть папку шаблонов", self)
         action_open_templates.triggered.connect(self._open_templates_folder)
@@ -188,9 +198,12 @@ class MainWindow(QMainWindow):
     
     def _on_tab_changed(self, index: int):
         """Handle tab change."""
-        tab_names = ["Слушатели", "Программы"]
+        tab_names = ["Слушатели", "Программы", "Журналы"]
         if 0 <= index < len(tab_names):
             self.statusbar.showMessage(f"Раздел: {tab_names[index]}")
+        # Refresh data when switching to Journals tab
+        if index == 2:
+            self.journals_tab.refresh_data()
     
     def _on_import(self):
         """Handle import action."""
@@ -271,7 +284,13 @@ class MainWindow(QMainWindow):
         """Refresh all data in tabs."""
         self.listeners_tab.refresh_data()
         self.programs_tab.refresh_data()
+        self.journals_tab.refresh_data()
         self.statusbar.showMessage("Данные обновлены")
+    
+    def _export_journals(self):
+        """Switch to Journals tab and trigger export."""
+        self.tab_widget.setCurrentWidget(self.journals_tab)
+        self.journals_tab._export_excel()
     
     def _open_templates_folder(self):
         """Open templates folder in file manager."""

@@ -77,6 +77,7 @@ output/*.docx
 listener_data.xlsx
 docx_files/
 templates
+13-01-2026_11-14-14/
 
 # Temporary files
 *.tmp

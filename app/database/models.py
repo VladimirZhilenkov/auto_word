@@ -289,3 +289,41 @@ class DocumentRegister(Base):
     
     def __repr__(self):
         return f"<DocumentRegister(number={self.number}, type={self.document_type})>"
+
+
+class OrderJournal(Base):
+    """
+    Журнал регистрации приказов по личному составу.
+    Независимая нумерация по типам: enrollment, admission, graduation.
+    """
+    __tablename__ = 'order_journal'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    journal_type: Mapped[str] = mapped_column(String(50), nullable=False)  # enrollment/admission/graduation
+    order_number: Mapped[int] = mapped_column(Integer, nullable=False)  # Порядковый номер в журнале для типа
+    order_date: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)  # Наименование/краткое содержание
+    executor: Mapped[str] = mapped_column(String(255), nullable=False)  # Ответственный исполнитель
+
+    # Связь с программой (необязательная), плюс дублирование названия для истории
+    program_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('programs.id', ondelete='SET NULL'), nullable=True
+    )
+    program_name: Mapped[Optional[str]] = mapped_column(Text)  # Историческое имя программы
+
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    document_path: Mapped[Optional[str]] = mapped_column(String(500))
+
+    # Отношение к объекту Program (без каскадного удаления записей журнала)
+    program: Mapped[Optional["Program"]] = relationship(viewonly=True)
+
+    __table_args__ = (
+        # Уникальность номера в пределах типа журнала
+        UniqueConstraint('journal_type', 'order_number', name='uq_order_journal_type_number'),
+        Index('ix_order_journal_type_number', 'journal_type', 'order_number'),
+        Index('ix_order_journal_date', 'order_date'),
+    )
+
+    def __repr__(self):
+        return f"<OrderJournal(type={self.journal_type}, number={self.order_number})>"
