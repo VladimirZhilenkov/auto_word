@@ -17,6 +17,10 @@ import sys
 import os
 from pathlib import Path
 
+from PyQt5.QtCore import QTimer
+
+from app.services.update_service import UpdateService
+
 # Add the application root to Python path
 APP_ROOT = Path(__file__).parent.absolute()
 sys.path.insert(0, str(APP_ROOT))
@@ -97,10 +101,26 @@ def create_main_window():
     return window
 
 
+
+
+def check_updates_silently(window):
+    """Background update check with statusbar notice."""
+    try:
+        svc = UpdateService(current_version=getattr(window, "APP_VERSION", "0.0.0"))
+        result = svc.check_for_updates()
+        if result.get("available") and hasattr(window, "statusbar"):
+            window.statusbar.showMessage(
+                f"Доступно обновление {result.get('version')} — откройте меню 'Справка'"
+            )
+    except Exception:
+        # Silent failure
+        pass
+
+
 def main():
     """Main entry point."""
     print("=" * 50)
-    print("Генератор документов v1.0.0")
+    print("Генератор документов v2.0.0")
     print("=" * 50)
     
     # Setup environment
@@ -117,6 +137,9 @@ def main():
     
     # Create and show main window
     window = create_main_window()
+
+    # Background update check
+    QTimer.singleShot(5000, lambda: check_updates_silently(window))
     
     # Run the application
     print("Приложение запущено")

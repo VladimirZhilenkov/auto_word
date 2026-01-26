@@ -11,8 +11,8 @@ from datetime import datetime, date
 from typing import List, Optional
 
 from sqlalchemy import (
-    Column, Integer, String, Date, DateTime, Text, 
-    ForeignKey, UniqueConstraint, Index
+    Column, Integer, String, Date, DateTime, Text,
+    ForeignKey, UniqueConstraint, Index, func
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -327,3 +327,47 @@ class OrderJournal(Base):
 
     def __repr__(self):
         return f"<OrderJournal(type={self.journal_type}, number={self.order_number})>"
+
+
+class ContractJournal(Base):
+    """
+    Журнал регистрации договоров.
+    Хранит ссылку на слушателя и программу, а также исторические данные.
+    """
+
+    __tablename__ = 'contract_journal'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    contract_number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    contract_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    # Связи
+    listener_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('listeners.id', ondelete='SET NULL')
+    )
+    program_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('programs.id', ondelete='SET NULL')
+    )
+
+    # Исторические данные на момент создания договора
+    listener_full_name: Mapped[Optional[str]] = mapped_column(String(255))
+    program_name: Mapped[Optional[str]] = mapped_column(String(500))
+
+    # Дополнительные поля договора
+    contract_sum: Mapped[Optional[str]] = mapped_column(String(100))
+    payment_type: Mapped[Optional[str]] = mapped_column(String(100))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    document_path: Mapped[Optional[str]] = mapped_column(String(500))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    # Отношения
+    listener: Mapped[Optional["Listener"]] = relationship(backref="contracts")
+    program: Mapped[Optional["Program"]] = relationship(backref="contracts")
+
+    __table_args__ = (
+        Index('ix_contract_journal_date', 'contract_date'),
+    )
+
+    def __repr__(self):
+        return f"<ContractJournal(number={self.contract_number}, listener={self.listener_full_name})>"

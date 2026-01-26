@@ -19,6 +19,7 @@ from .dialogs import ImportDialog, GenerateDialog
 from .dialogs.order_dialog import OrderGenerateDialog
 from .dialogs.backup_dialog import BackupDialog
 from .dialogs.database_config_dialog import DatabaseConfigDialog
+from .dialogs.update_dialog import UpdateDialog
 
 
 class MainWindow(QMainWindow):
@@ -27,7 +28,7 @@ class MainWindow(QMainWindow):
     """
     
     APP_TITLE = "Генератор документов"
-    APP_VERSION = "1.0.0"
+    APP_VERSION = "2.0.0"
     
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -181,6 +182,10 @@ class MainWindow(QMainWindow):
         
         # Help menu
         help_menu = menubar.addMenu("Справка")
+
+        action_check_updates = QAction("Проверить обновления", self)
+        action_check_updates.triggered.connect(self._on_check_updates)
+        help_menu.addAction(action_check_updates)
         
         action_about = QAction("О программе", self)
         action_about.triggered.connect(self._show_about)
@@ -357,6 +362,11 @@ class MainWindow(QMainWindow):
         """Show template creation instructions."""
         from .dialogs.template_help_dialog import TemplateHelpDialog
         dialog = TemplateHelpDialog(self)
+        dialog.exec_()
+
+    def _on_check_updates(self):
+        """Open update dialog."""
+        dialog = UpdateDialog(self, current_version=self.APP_VERSION)
         dialog.exec_()
     
     def closeEvent(self, event):
