@@ -146,38 +146,33 @@ class UpdateDialog(QDialog):
 
         self.progress.setVisible(False)
         
-        # Для EXE файла просто открываем папку с ним
-        if archive_path.endswith(".exe"):
-            import subprocess
-            import sys
-            from pathlib import Path
-            
-            folder = Path(archive_path).parent
-            QMessageBox.information(
-                self, "Скачано", 
-                f"Файл обновления скачан:\n{archive_path}\n\n"
-                "Закройте приложение и запустите скачанный файл."
-            )
-            # Открываем папку с файлом
+        import subprocess
+        import sys
+        from pathlib import Path
+        
+        # Всегда открываем папку с файлом - пользователь сам заменит
+        # (автоматическая замена не работает пока программа запущена)
+        folder = Path(archive_path).parent
+        
+        QMessageBox.information(
+            self, "Обновление скачано", 
+            f"Файл обновления сохранён:\n{archive_path}\n\n"
+            "Для установки:\n"
+            "1. Закройте эту программу\n"
+            "2. Распакуйте архив\n"
+            "3. Замените старые файлы новыми\n"
+            "4. Запустите программу"
+        )
+        
+        # Открываем папку с файлом
+        try:
             if sys.platform == 'darwin':
                 subprocess.run(['open', str(folder)])
             elif sys.platform == 'win32':
                 subprocess.run(['explorer', '/select,', archive_path])
             else:
                 subprocess.run(['xdg-open', str(folder)])
-        else:
-            # ZIP архив - пробуем применить
-            ok = self.service.apply_update(archive_path)
-            if ok:
-                QMessageBox.information(
-                    self, "Готово", 
-                    "Обновление успешно установлено.\nПерезапустите приложение для применения изменений."
-                )
-            else:
-                QMessageBox.warning(
-                    self, "Внимание", 
-                    "Не удалось применить обновление автоматически.\n"
-                    "Попробуйте скачать вручную со страницы релиза на GitHub."
-                )
+        except Exception:
+            pass
         
         self.btn_check.setEnabled(True)
