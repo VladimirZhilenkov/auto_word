@@ -94,6 +94,62 @@ _engine = None
 _SessionFactory = None
 
 
+def _run_migrations(engine: Engine):
+    """
+    Run automatic database migrations to add missing columns.
+    This ensures smooth updates from older versions.
+    """
+    # Define all columns that should exist in each table
+    # Format: (table_name, column_name, column_type)
+    migrations = [
+        # Programs table columns
+        ("programs", "training_duration", "VARCHAR(100)"),
+        ("programs", "program_short_name", "VARCHAR(255)"),
+        ("programs", "training_basis", "VARCHAR(100)"),
+        ("programs", "training_period", "VARCHAR(100)"),
+        ("programs", "program_volume", "VARCHAR(100)"),
+        ("programs", "education_form", "VARCHAR(50)"),
+        ("programs", "education_format", "TEXT"),
+        ("programs", "listener_category", "VARCHAR(255)"),
+        ("programs", "expulsion_date", "DATE"),
+        
+        # Listeners table columns
+        ("listeners", "birth_date", "DATE"),
+        ("listeners", "mobile_phone", "VARCHAR(50)"),
+        ("listeners", "work_phone", "VARCHAR(50)"),
+        ("listeners", "email", "VARCHAR(255)"),
+        ("listeners", "passport_series_number", "VARCHAR(20)"),
+        ("listeners", "passport_issue_date", "DATE"),
+        ("listeners", "passport_issued_by", "VARCHAR(500)"),
+        ("listeners", "passport_department_code", "VARCHAR(20)"),
+        ("listeners", "registration_address", "VARCHAR(500)"),
+        ("listeners", "actual_address", "VARCHAR(500)"),
+        ("listeners", "snils", "VARCHAR(20)"),
+        ("listeners", "inn", "VARCHAR(20)"),
+        ("listeners", "personal_data_consent", "INTEGER DEFAULT 0"),
+        
+        # ProgramListener table columns
+        ("program_listeners", "order_number", "INTEGER"),
+        ("program_listeners", "enrollment_date", "DATE"),
+    ]
+    
+    with engine.connect() as conn:
+        for table_name, column_name, column_type in migrations:
+            try:
+                # Check if column exists
+                result = conn.execute(text(f"PRAGMA table_info({table_name})"))
+                existing_columns = [row[1] for row in result.fetchall()]
+                
+                if column_name not in existing_columns:
+                    # Add missing column
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
+                    conn.commit()
+                    print(f"Migration: added column {table_name}.{column_name}")
+            except Exception as e:
+                # Silently ignore errors (column might already exist or table doesn't exist yet)
+                pass
+
+
 def init_database(db_path: Path = None, config: DatabaseConfig = None) -> Engine:
     """
     Initialize database: create engine, tables, and session factory.
@@ -129,6 +185,9 @@ def init_database(db_path: Path = None, config: DatabaseConfig = None) -> Engine
     
     # Create all tables
     Base.metadata.create_all(_engine)
+    
+    # Run migrations for existing databases (add missing columns)
+    _run_migrations(_engine)
     
     # Create session factory
     _SessionFactory = sessionmaker(bind=_engine, expire_on_commit=False)
