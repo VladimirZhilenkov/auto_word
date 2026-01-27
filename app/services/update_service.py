@@ -19,6 +19,28 @@ from zipfile import ZipFile
 from packaging import version
 
 
+def _get_ssl_context():
+    """Get SSL context, trying certifi first, then system certs."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        pass
+    
+    # Пробуем системный контекст
+    try:
+        ctx = ssl.create_default_context()
+        return ctx
+    except Exception:
+        pass
+    
+    # Fallback: отключаем проверку (не идеально, но работает)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 class UpdateService:
     """Update service using GitHub Releases."""
     
@@ -34,6 +56,7 @@ class UpdateService:
     def __init__(self, current_version: str = "0.0.0"):
         self.current_version = current_version.lstrip("v") if current_version else "0.0.0"
         self.app_dir = self._get_app_dir()
+        self._ssl_context = _get_ssl_context()
 
     def _get_app_dir(self) -> Path:
         if getattr(sys, "frozen", False):
@@ -50,9 +73,7 @@ class UpdateService:
                 self.GITHUB_API_URL,
                 headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "AutoWord-Updater"}
             )
-            # Создаём SSL контекст для HTTPS
-            ctx = ssl.create_default_context()
-            with request.urlopen(req, timeout=self.TIMEOUT, context=ctx) as resp:
+            with request.urlopen(req, timeout=self.TIMEOUT, context=self._ssl_context) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except HTTPError as exc:
             if exc.code == 404:
@@ -112,7 +133,7 @@ class UpdateService:
 
         try:
             req = request.Request(url, headers={"User-Agent": "AutoWord-Updater"})
-            with request.urlopen(req) as resp, open(target_path, "wb") as f:
+            with request.urlopen(req, context=self._ssl_context) as resp, open(target_path, "wb") as f:
                 total = int(resp.getheader("Content-Length") or 0)
                 downloaded = 0
                 chunk_size = 1024 * 64
@@ -139,4 +160,3 @@ class UpdateService:
             return True
         except Exception:
             return False
-

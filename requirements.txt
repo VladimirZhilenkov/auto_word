@@ -10,6 +10,7 @@ Jinja2>=3.0.0
 lxml>=4.9.0
 pyinstaller==6.3.0
 packaging>=23.0
+certifi>=2023.0.0
 
 # Optional: Remote database drivers
 # Uncomment to enable remote database support:
