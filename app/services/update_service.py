@@ -160,3 +160,77 @@ class UpdateService:
             return True
         except Exception:
             return False
+
+    def create_update_script(self, archive_path: str) -> Optional[str]:
+        """
+        Create a batch script for Windows that will:
+        1. Wait for the app to close
+        2. Extract the update
+        3. Restart the app
+        
+        Returns path to the script, or None on non-Windows.
+        """
+        if sys.platform != 'win32':
+            return None
+        
+        archive_path = Path(archive_path)
+        script_path = archive_path.parent / "update.bat"
+        
+        # Получаем имя exe файла
+        exe_name = "DocumentGenerator.exe"
+        if getattr(sys, "frozen", False):
+            exe_name = Path(sys.executable).name
+        
+        exe_path = self.app_dir / exe_name
+        
+        # Создаём batch скрипт
+        script_content = f'''@echo off
+chcp 65001 >nul
+echo ========================================
+echo    Обновление AutoWord
+echo ========================================
+echo.
+echo Ожидание закрытия программы...
+
+:wait_loop
+tasklist /FI "IMAGENAME eq {exe_name}" 2>NUL | find /I /N "{exe_name}" >NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak >nul
+    goto wait_loop
+)
+
+echo Программа закрыта. Устанавливаем обновление...
+timeout /t 1 /nobreak >nul
+
+echo Распаковка файлов...
+powershell -Command "Expand-Archive -Path '{archive_path}' -DestinationPath '{self.app_dir}' -Force"
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ОШИБКА: Не удалось распаковать обновление!
+    echo Попробуйте распаковать вручную.
+    pause
+    exit /b 1
+)
+
+echo.
+echo ========================================
+echo    Обновление успешно установлено!
+echo ========================================
+echo.
+echo Запуск программы...
+timeout /t 2 /nobreak >nul
+
+start "" "{exe_path}"
+
+:: Удаляем временные файлы
+del "{archive_path}" 2>nul
+del "%~f0" 2>nul
+'''
+        
+        try:
+            with open(script_path, 'w', encoding='utf-8') as f:
+                f.write(script_content)
+            return str(script_path)
+        except Exception:
+            return None

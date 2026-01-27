@@ -142,6 +142,7 @@ class UpdateDialog(QDialog):
             QMessageBox.critical(self, "Ошибка", f"Не удалось скачать обновление:\n{exc}")
             self.progress.setVisible(False)
             self.btn_check.setEnabled(True)
+            self.btn_update.setEnabled(True)
             return
 
         self.progress.setVisible(False)
@@ -150,29 +151,59 @@ class UpdateDialog(QDialog):
         import sys
         from pathlib import Path
         
-        # Всегда открываем папку с файлом - пользователь сам заменит
-        # (автоматическая замена не работает пока программа запущена)
-        folder = Path(archive_path).parent
-        
-        QMessageBox.information(
-            self, "Обновление скачано", 
-            f"Файл обновления сохранён:\n{archive_path}\n\n"
-            "Для установки:\n"
-            "1. Закройте эту программу\n"
-            "2. Распакуйте архив\n"
-            "3. Замените старые файлы новыми\n"
-            "4. Запустите программу"
-        )
-        
-        # Открываем папку с файлом
-        try:
-            if sys.platform == 'darwin':
-                subprocess.run(['open', str(folder)])
-            elif sys.platform == 'win32':
-                subprocess.run(['explorer', '/select,', archive_path])
-            else:
-                subprocess.run(['xdg-open', str(folder)])
-        except Exception:
-            pass
+        # На Windows создаём скрипт автообновления
+        if sys.platform == 'win32':
+            script_path = self.service.create_update_script(archive_path)
+            if script_path:
+                reply = QMessageBox.question(
+                    self, "Обновление скачано",
+                    "Обновление скачано и готово к установке.\n\n"
+                    "Для установки программа будет закрыта, "
+                    "файлы обновлены, и программа запустится снова.\n\n"
+                    "Установить обновление сейчас?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                
+                if reply == QMessageBox.Yes:
+                    # Запускаем скрипт обновления и закрываем программу
+                    subprocess.Popen(
+                        ['cmd', '/c', 'start', '', script_path],
+                        shell=False,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    )
+                    # Закрываем приложение
+                    from PyQt5.QtWidgets import QApplication
+                    QApplication.quit()
+                    return
+                else:
+                    # Пользователь отказался - показываем папку
+                    folder = Path(archive_path).parent
+                    subprocess.run(['explorer', '/select,', archive_path])
+                    QMessageBox.information(
+                        self, "Обновление отложено",
+                        f"Файл обновления сохранён:\n{archive_path}\n\n"
+                        "Вы можете установить его позже вручную."
+                    )
+        else:
+            # На других ОС просто открываем папку
+            folder = Path(archive_path).parent
+            QMessageBox.information(
+                self, "Обновление скачано", 
+                f"Файл обновления сохранён:\n{archive_path}\n\n"
+                "Для установки:\n"
+                "1. Закройте эту программу\n"
+                "2. Распакуйте архив\n"
+                "3. Замените старые файлы новыми\n"
+                "4. Запустите программу"
+            )
+            try:
+                if sys.platform == 'darwin':
+                    subprocess.run(['open', str(folder)])
+                else:
+                    subprocess.run(['xdg-open', str(folder)])
+            except Exception:
+                pass
         
         self.btn_check.setEnabled(True)
+        self.btn_update.setEnabled(True)
