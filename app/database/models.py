@@ -185,6 +185,7 @@ class Program(Base):
     program_short_name: Mapped[Optional[str]] = mapped_column(String(255))  # Краткое наименование
     training_basis: Mapped[Optional[str]] = mapped_column(String(100))  # Основание (контракт/договор)
     training_period: Mapped[Optional[str]] = mapped_column(String(100))  # Период обучения
+    training_duration: Mapped[Optional[str]] = mapped_column(String(100))  # Продолжительность обучения
     program_volume: Mapped[Optional[str]] = mapped_column(String(100))  # Объем программы
     education_form: Mapped[Optional[str]] = mapped_column(String(50))  # Форма обучения
     education_format: Mapped[Optional[str]] = mapped_column(Text)  # Формат обучения

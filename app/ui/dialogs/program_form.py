@@ -95,6 +95,11 @@ class ProgramFormDialog(QDialog):
         self.edit_training_period.setPlaceholderText("Например: 01.01.2026 - 31.01.2026")
         details_layout.addRow("Период обучения:", self.edit_training_period)
         
+        # Training duration
+        self.edit_training_duration = QLineEdit()
+        self.edit_training_duration.setPlaceholderText("Например: 2 недели, 1 месяц")
+        details_layout.addRow("Продолжительность:", self.edit_training_duration)
+        
         # Program volume
         self.edit_program_volume = QLineEdit()
         self.edit_program_volume.setPlaceholderText("Например: 72 часа")
@@ -180,6 +185,7 @@ class ProgramFormDialog(QDialog):
                 self.combo_training_basis.setEditText(self.program.training_basis)
         
         self.edit_training_period.setText(self.program.training_period or '')
+        self.edit_training_duration.setText(self.program.training_duration or '')
         self.edit_program_volume.setText(self.program.program_volume or '')
         
         # Set education form
@@ -239,6 +245,7 @@ class ProgramFormDialog(QDialog):
             'program_short_name': self.edit_short_name.text().strip() or None,
             'training_basis': self.combo_training_basis.currentText().strip() or None,
             'training_period': self.edit_training_period.text().strip() or None,
+            'training_duration': self.edit_training_duration.text().strip() or None,
             'program_volume': self.edit_program_volume.text().strip() or None,
             'education_form': self.combo_education_form.currentText() or None,
             'education_format': self.combo_education_format.currentText() or None,

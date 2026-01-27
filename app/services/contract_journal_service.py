@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import sys
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from docxtpl import DocxTemplate
 from sqlalchemy import and_, func
@@ -15,6 +16,146 @@ from sqlalchemy import and_, func
 from ..database.connection import DatabaseSession
 from ..database.models import ContractJournal, Listener, Program
 from .declension import get_declension_service
+
+
+def _number_to_words(number: Union[int, float, Decimal, str, None], currency: str = "rub") -> str:
+    """
+    Конвертирует число в сумму прописью на русском языке.
+    
+    Args:
+        number: Число для конвертации
+        currency: Валюта ('rub' - рубли, 'usd' - доллары, 'eur' - евро, 'none' - без валюты)
+    
+    Returns:
+        Строка с суммой прописью
+    """
+    if number is None:
+        return ""
+    
+    try:
+        # Преобразуем в Decimal для точности
+        if isinstance(number, str):
+            number = number.replace(" ", "").replace(",", ".")
+        num = Decimal(str(number))
+    except:
+        return ""
+    
+    # Единицы
+    units = [
+        "", "один", "два", "три", "четыре", "пять", 
+        "шесть", "семь", "восемь", "девять"
+    ]
+    units_female = [
+        "", "одна", "две", "три", "четыре", "пять",
+        "шесть", "семь", "восемь", "девять"
+    ]
+    
+    # Числа 10-19
+    teens = [
+        "десять", "одиннадцать", "двенадцать", "тринадцать", "четырнадцать",
+        "пятнадцать", "шестнадцать", "семнадцать", "восемнадцать", "девятнадцать"
+    ]
+    
+    # Десятки
+    tens = [
+        "", "", "двадцать", "тридцать", "сорок", "пятьдесят",
+        "шестьдесят", "семьдесят", "восемьдесят", "девяносто"
+    ]
+    
+    # Сотни
+    hundreds = [
+        "", "сто", "двести", "триста", "четыреста", "пятьсот",
+        "шестьсот", "семьсот", "восемьсот", "девятьсот"
+    ]
+    
+    def _get_form(n: int, forms: tuple) -> str:
+        """Возвращает правильную форму слова в зависимости от числа."""
+        n = abs(n) % 100
+        if 11 <= n <= 19:
+            return forms[2]
+        n = n % 10
+        if n == 1:
+            return forms[0]
+        if 2 <= n <= 4:
+            return forms[1]
+        return forms[2]
+    
+    def _convert_group(n: int, female: bool = False) -> str:
+        """Конвертирует группу из трёх цифр."""
+        result = []
+        
+        if n >= 100:
+            result.append(hundreds[n // 100])
+            n %= 100
+        
+        if 10 <= n <= 19:
+            result.append(teens[n - 10])
+        else:
+            if n >= 10:
+                result.append(tens[n // 10])
+                n %= 10
+            if n > 0:
+                if female:
+                    result.append(units_female[n])
+                else:
+                    result.append(units[n])
+        
+        return " ".join(filter(None, result))
+    
+    # Разделяем целую и дробную части
+    integer_part = int(num)
+    fractional_part = int(round((num - integer_part) * 100))
+    
+    if integer_part == 0:
+        result = "ноль"
+    else:
+        groups = []
+        temp = integer_part
+        
+        # Единицы (рубли - мужской род)
+        group = temp % 1000
+        if group:
+            groups.append(_convert_group(group, female=False))
+        temp //= 1000
+        
+        # Тысячи (женский род)
+        group = temp % 1000
+        if group:
+            word = _get_form(group, ("тысяча", "тысячи", "тысяч"))
+            groups.append(_convert_group(group, female=True) + " " + word)
+        temp //= 1000
+        
+        # Миллионы
+        group = temp % 1000
+        if group:
+            word = _get_form(group, ("миллион", "миллиона", "миллионов"))
+            groups.append(_convert_group(group, female=False) + " " + word)
+        temp //= 1000
+        
+        # Миллиарды
+        group = temp % 1000
+        if group:
+            word = _get_form(group, ("миллиард", "миллиарда", "миллиардов"))
+            groups.append(_convert_group(group, female=False) + " " + word)
+        
+        result = " ".join(reversed(groups))
+    
+    # Добавляем валюту
+    if currency == "rub":
+        rub_word = _get_form(integer_part, ("рубль", "рубля", "рублей"))
+        kop_word = _get_form(fractional_part, ("копейка", "копейки", "копеек"))
+        result = f"{result} {rub_word} {fractional_part:02d} {kop_word}"
+    elif currency == "usd":
+        usd_word = _get_form(integer_part, ("доллар", "доллара", "долларов"))
+        cent_word = _get_form(fractional_part, ("цент", "цента", "центов"))
+        result = f"{result} {usd_word} {fractional_part:02d} {cent_word}"
+    elif currency == "eur":
+        eur_word = _get_form(integer_part, ("евро", "евро", "евро"))
+        cent_word = _get_form(fractional_part, ("цент", "цента", "центов"))
+        result = f"{result} {eur_word} {fractional_part:02d} {cent_word}"
+    # currency == "none" - без валюты
+    
+    return result.strip()
 
 
 def _get_app_dir() -> Path:
@@ -132,6 +273,7 @@ class ContractJournalService:
                     contract_date=contract_date,
                     template_name=template_name,
                     extra_context=kwargs.get("context") or {},
+                    contract_sum=kwargs.get("contract_sum"),
                 )
 
                 entry = ContractJournal(
@@ -326,13 +468,14 @@ class ContractJournalService:
         contract_date: date,
         template_name: Optional[str] = None,
         extra_context: Optional[Dict[str, Any]] = None,
+        contract_sum: Optional[Union[int, float, Decimal, str]] = None,
     ) -> Optional[str]:
         tpl_name = template_name or self.DEFAULT_TEMPLATE
         template_path = self.templates_dir / tpl_name
         if not template_path.exists():
             return None
 
-        context = self._build_context(listener, program, contract_number, contract_date)
+        context = self._build_context(listener, program, contract_number, contract_date, contract_sum)
         if extra_context:
             context.update(extra_context)
 
@@ -354,35 +497,132 @@ class ContractJournalService:
         program: Optional[Program],
         contract_number: int,
         contract_date: date,
+        contract_sum: Optional[Union[int, float, Decimal, str]] = None,
     ) -> Dict[str, Any]:
+        # Базовые данные слушателя (без префикса - для совместимости с шаблонами)
+        
+        # Формируем инициалы: И.О. Фамилия
+        first_initial = (listener.first_name[0] + ".") if listener.first_name else ""
+        middle_initial = (listener.middle_name[0] + ".") if listener.middle_name else ""
+        initials_last_name = f"{first_initial}{middle_initial} {listener.last_name or ''}".strip()
+        # Фамилия И.О.
+        last_name_initials = f"{listener.last_name or ''} {first_initial}{middle_initial}".strip()
+        
         ctx: Dict[str, Any] = {
+            # Номер и дата договора
             "contract_number": contract_number,
             "contract_date": contract_date.strftime("%d.%m.%Y"),
-            "listener_full_name": listener.full_name,
-            "listener_passport": listener.passport_series_number or "",
-            "listener_address": listener.registration_address or "",
-            "listener_phone": listener.mobile_phone or "",
-            "listener_email": listener.email or "",
+            "contract_year": contract_date.strftime("%Y"),
+            
+            # ФИО слушателя (без префикса)
+            "full_name": listener.full_name,
+            "last_name": listener.last_name or "",
+            "first_name": listener.first_name or "",
+            "middle_name": listener.middle_name or "",
+            "initials_last_name": initials_last_name,  # И.О. Фамилия
+            "last_name_initials": last_name_initials,  # Фамилия И.О.
+            
+            # Дата рождения
+            "birth_date": listener.birth_date.strftime("%d.%m.%Y") if listener.birth_date else "",
+            
+            # Рабочая информация
+            "position": listener.position or "",
+            "workplace": listener.workplace or "",
+            "region": listener.region or "",
+            
+            # Контактная информация
+            "mobile_phone": listener.mobile_phone or "",
+            "work_phone": listener.work_phone or "",
+            "email": listener.email or "",
+            
+            # Паспортные данные
+            "passport_series_number": listener.passport_series_number or "",
+            "passport_issue_date": listener.passport_issue_date.strftime("%d.%m.%Y") if listener.passport_issue_date else "",
+            "passport_issued_by": listener.passport_issued_by or "",
+            "passport_department_code": listener.passport_department_code or "",
+            
+            # Адреса
+            "registration_address": listener.registration_address or "",
+            "actual_address": listener.actual_address or "",
+            
+            # Идентификационные данные
+            "snils": listener.snils or "",
+            "inn": listener.inn or "",
         }
+        
+        # Дублируем с префиксом listener_ для обратной совместимости
+        ctx.update({
+            "listener_full_name": listener.full_name,
+            "listener_last_name": listener.last_name or "",
+            "listener_first_name": listener.first_name or "",
+            "listener_middle_name": listener.middle_name or "",
+            "listener_initials_last_name": initials_last_name,  # И.О. Фамилия
+            "listener_last_name_initials": last_name_initials,  # Фамилия И.О.
+            "listener_birth_date": listener.birth_date.strftime("%d.%m.%Y") if listener.birth_date else "",
+            "listener_position": listener.position or "",
+            "listener_workplace": listener.workplace or "",
+            "listener_region": listener.region or "",
+            "listener_phone": listener.mobile_phone or "",
+            "listener_mobile_phone": listener.mobile_phone or "",
+            "listener_work_phone": listener.work_phone or "",
+            "listener_email": listener.email or "",
+            "listener_passport": listener.passport_series_number or "",
+            "listener_passport_series_number": listener.passport_series_number or "",
+            "listener_passport_issue_date": listener.passport_issue_date.strftime("%d.%m.%Y") if listener.passport_issue_date else "",
+            "listener_passport_issued_by": listener.passport_issued_by or "",
+            "listener_passport_department_code": listener.passport_department_code or "",
+            "listener_address": listener.registration_address or "",
+            "listener_registration_address": listener.registration_address or "",
+            "listener_actual_address": listener.actual_address or "",
+            "listener_snils": listener.snils or "",
+            "listener_inn": listener.inn or "",
+        })
+        
+        # Сумма договора
+        if contract_sum is not None:
+            ctx["contract_sum"] = contract_sum
+            ctx["contract_sum_words"] = _number_to_words(contract_sum, currency="rub")
+            ctx["contract_sum_words_caps"] = _number_to_words(contract_sum, currency="rub").capitalize()
+        else:
+            ctx["contract_sum"] = ""
+            ctx["contract_sum_words"] = ""
+            ctx["contract_sum_words_caps"] = ""
 
+        # Склонения ФИО
         decl = self.declension.get_all_declensions(
             listener.last_name or "",
             listener.first_name or "",
             listener.middle_name,
         )
         ctx["listener_full_name_genitive"] = decl.get("full_name_genitive", "")
+        ctx["full_name_genitive"] = decl.get("full_name_genitive", "")
         ctx.update(decl)
 
+        # Программа
         if program:
             ctx.update(
                 {
                     "program_name": program.program_name or "",
+                    "program_short_name": program.program_short_name or program.program_name or "",
                     "program_volume": program.program_volume or "",
                     "training_period": program.training_period or "",
+                    "training_duration": program.training_duration or "",
+                    "education_form": program.education_form or "",
+                    "education_format": program.education_format or "",
+                    "expulsion_date": program.expulsion_date.strftime("%d.%m.%Y") if program.expulsion_date else "",
                 }
             )
         else:
-            ctx.update({"program_name": "", "program_volume": "", "training_period": ""})
+            ctx.update({
+                "program_name": "", 
+                "program_short_name": "",
+                "program_volume": "", 
+                "training_period": "",
+                "training_duration": "",
+                "education_form": "",
+                "education_format": "",
+                "expulsion_date": "",
+            })
 
         return ctx
 
