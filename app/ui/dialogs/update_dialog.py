@@ -60,7 +60,7 @@ class UpdateDialog(QDialog):
         
         self.btn_github = QPushButton("🔗 Открыть на GitHub")
         self.btn_github.clicked.connect(self._open_github)
-        self.btn_github.setVisible(False)
+        # Кнопка GitHub всегда видна для ручного скачивания
         
         self.btn_update = QPushButton("⬇️ Скачать обновление")
         self.btn_update.clicked.connect(self._on_update)
@@ -82,7 +82,6 @@ class UpdateDialog(QDialog):
 
     def _check_updates(self):
         self.btn_update.setEnabled(False)
-        self.btn_github.setVisible(False)
         self.label_available.setText("<b>Доступная версия:</b> проверка...")
         self.changelog.clear()
         
@@ -95,9 +94,7 @@ class UpdateDialog(QDialog):
         if result.get("error"):
             error_msg = result['error']
             self.label_available.setText("<b>Доступная версия:</b> —")
-            self.changelog.setPlainText(f"⚠️ {error_msg}\n\nПроверьте подключение к интернету и попробуйте позже.")
-            # Показываем кнопку GitHub для ручной проверки
-            self.btn_github.setVisible(True)
+            self.changelog.setPlainText(f"⚠️ {error_msg}\n\nПроверьте подключение к интернету или скачайте обновление вручную с GitHub.")
             return
 
         self.available_version = result.get("version")
