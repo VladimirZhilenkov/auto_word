@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import json
 import shutil
+import ssl
 import sys
 import tempfile
 from pathlib import Path
 from typing import Callable, Dict, Optional
 from urllib import request
+from urllib.error import URLError, HTTPError
 from zipfile import ZipFile
 
 from packaging import version
@@ -25,6 +27,9 @@ class UpdateService:
     
     # Имя файла для скачивания (должно совпадать с asset в Release)
     ASSET_NAME = "AutoWord.zip"
+    
+    # Таймаут для запросов (секунды)
+    TIMEOUT = 10
 
     def __init__(self, current_version: str = "0.0.0"):
         self.current_version = current_version.lstrip("v") if current_version else "0.0.0"
@@ -45,10 +50,26 @@ class UpdateService:
                 self.GITHUB_API_URL,
                 headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "AutoWord-Updater"}
             )
-            with request.urlopen(req, timeout=15) as resp:
+            # Создаём SSL контекст для HTTPS
+            ctx = ssl.create_default_context()
+            with request.urlopen(req, timeout=self.TIMEOUT, context=ctx) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            if exc.code == 404:
+                return {"available": False, "error": "Релизы не найдены на GitHub"}
+            return {"available": False, "error": f"Ошибка сервера: {exc.code}"}
+        except URLError as exc:
+            # Дружественные сообщения для разных типов сетевых ошибок
+            reason = str(exc.reason)
+            if "10061" in reason or "Connection refused" in reason:
+                return {"available": False, "error": "Нет подключения к интернету или GitHub недоступен"}
+            if "timed out" in reason.lower() or "timeout" in reason.lower():
+                return {"available": False, "error": "Превышено время ожидания. Проверьте подключение к интернету"}
+            if "getaddrinfo" in reason.lower() or "name resolution" in reason.lower():
+                return {"available": False, "error": "Не удалось определить адрес сервера. Проверьте подключение к интернету"}
+            return {"available": False, "error": f"Ошибка сети: {reason}"}
         except Exception as exc:
-            return {"available": False, "error": str(exc)}
+            return {"available": False, "error": f"Не удалось проверить обновления: {exc}"}
 
         # Получаем версию из tag_name (например "v2.1.0" -> "2.1.0")
         tag = data.get("tag_name", "")

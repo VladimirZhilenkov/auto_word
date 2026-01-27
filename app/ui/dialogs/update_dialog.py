@@ -93,8 +93,11 @@ class UpdateDialog(QDialog):
         result = self.service.check_for_updates()
         
         if result.get("error"):
-            self.label_available.setText("<b>Доступная версия:</b> ошибка проверки")
-            QMessageBox.warning(self, "Ошибка", f"Не удалось проверить обновления:\n{result['error']}")
+            error_msg = result['error']
+            self.label_available.setText("<b>Доступная версия:</b> —")
+            self.changelog.setPlainText(f"⚠️ {error_msg}\n\nПроверьте подключение к интернету и попробуйте позже.")
+            # Показываем кнопку GitHub для ручной проверки
+            self.btn_github.setVisible(True)
             return
 
         self.available_version = result.get("version")
