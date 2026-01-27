@@ -29,9 +29,14 @@ jobs:
         run: |
           pyinstaller build_windows.spec
       
+      - name: List dist folder
+        run: |
+          dir dist
+        shell: cmd
+      
       - name: Create ZIP archive
         run: |
-          Compress-Archive -Path dist\AutoWord\* -DestinationPath AutoWord-${{ github.ref_name }}.zip
+          Compress-Archive -Path dist\* -DestinationPath AutoWord-${{ github.ref_name }}.zip
         shell: pwsh
       
       - name: Upload artifact
