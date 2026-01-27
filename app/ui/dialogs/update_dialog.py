@@ -41,6 +41,9 @@ class UpdateDialog(QDialog):
         self.label_current = QLabel(f"<b>Текущая версия:</b> {self.service.get_current_version()}")
         layout.addWidget(self.label_current)
 
+        self.label_date = QLabel("<b>Дата обновления:</b> —")
+        layout.addWidget(self.label_date)
+
         self.label_available = QLabel("<b>Доступная версия:</b> —")
         layout.addWidget(self.label_available)
 
@@ -100,6 +103,19 @@ class UpdateDialog(QDialog):
         self.available_version = result.get("version")
         self.download_url = result.get("download_url")
         self.release_url = result.get("release_url")
+        
+        # Форматируем дату релиза
+        published = result.get("published_at", "")
+        if published:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                date_str = dt.strftime("%d.%m.%Y %H:%M")
+            except:
+                date_str = published[:10] if len(published) >= 10 else "—"
+        else:
+            date_str = "—"
+        self.label_date.setText(f"<b>Дата релиза:</b> {date_str}")
         
         self.label_available.setText(f"<b>Доступная версия:</b> {self.available_version}")
         self.changelog.setPlainText(result.get("changelog") or "Нет описания")

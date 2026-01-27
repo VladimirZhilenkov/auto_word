@@ -113,6 +113,7 @@ class UpdateService:
             "changelog": changelog,
             "download_url": download_url,
             "release_url": data.get("html_url", ""),
+            "published_at": data.get("published_at", ""),
         }
 
     def _find_asset_url(self, assets: list) -> Optional[str]:
