@@ -18,13 +18,14 @@ from ..database.models import ContractJournal, Listener, Program
 from .declension import get_declension_service
 
 
-def _number_to_words(number: Union[int, float, Decimal, str, None], currency: str = "rub") -> str:
+def _number_to_words(number: Union[int, float, Decimal, str, None], currency: str = "rub", skip_cents: bool = False) -> str:
     """
     Конвертирует число в сумму прописью на русском языке.
     
     Args:
         number: Число для конвертации
         currency: Валюта ('rub' - рубли, 'usd' - доллары, 'eur' - евро, 'none' - без валюты)
+        skip_cents: Если True, не выводить копейки/центы
     
     Returns:
         Строка с суммой прописью
@@ -143,16 +144,25 @@ def _number_to_words(number: Union[int, float, Decimal, str, None], currency: st
     # Добавляем валюту
     if currency == "rub":
         rub_word = _get_form(integer_part, ("рубль", "рубля", "рублей"))
-        kop_word = _get_form(fractional_part, ("копейка", "копейки", "копеек"))
-        result = f"{result} {rub_word} {fractional_part:02d} {kop_word}"
+        if skip_cents:
+            result = f"{result} {rub_word}"
+        else:
+            kop_word = _get_form(fractional_part, ("копейка", "копейки", "копеек"))
+            result = f"{result} {rub_word} {fractional_part:02d} {kop_word}"
     elif currency == "usd":
         usd_word = _get_form(integer_part, ("доллар", "доллара", "долларов"))
-        cent_word = _get_form(fractional_part, ("цент", "цента", "центов"))
-        result = f"{result} {usd_word} {fractional_part:02d} {cent_word}"
+        if skip_cents:
+            result = f"{result} {usd_word}"
+        else:
+            cent_word = _get_form(fractional_part, ("цент", "цента", "центов"))
+            result = f"{result} {usd_word} {fractional_part:02d} {cent_word}"
     elif currency == "eur":
         eur_word = _get_form(integer_part, ("евро", "евро", "евро"))
-        cent_word = _get_form(fractional_part, ("цент", "цента", "центов"))
-        result = f"{result} {eur_word} {fractional_part:02d} {cent_word}"
+        if skip_cents:
+            result = f"{result} {eur_word}"
+        else:
+            cent_word = _get_form(fractional_part, ("цент", "цента", "центов"))
+            result = f"{result} {eur_word} {fractional_part:02d} {cent_word}"
     # currency == "none" - без валюты
     
     return result.strip()
@@ -581,8 +591,8 @@ class ContractJournalService:
         # Сумма договора
         if contract_sum is not None:
             ctx["contract_sum"] = contract_sum
-            ctx["contract_sum_words"] = _number_to_words(contract_sum, currency="rub")
-            ctx["contract_sum_words_caps"] = _number_to_words(contract_sum, currency="rub").capitalize()
+            ctx["contract_sum_words"] = _number_to_words(contract_sum, currency="rub", skip_cents=True)
+            ctx["contract_sum_words_caps"] = _number_to_words(contract_sum, currency="rub", skip_cents=True).capitalize()
         else:
             ctx["contract_sum"] = ""
             ctx["contract_sum_words"] = ""
