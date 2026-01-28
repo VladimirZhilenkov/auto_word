@@ -114,6 +114,8 @@ def _run_migrations(engine: Engine):
         ("programs", "expulsion_date", "DATE"),
         
         # Listeners table columns
+        ("listeners", "gender", "VARCHAR(1) DEFAULT 'M'"),
+        ("listeners", "education", "TEXT"),
         ("listeners", "birth_date", "DATE"),
         ("listeners", "mobile_phone", "VARCHAR(50)"),
         ("listeners", "work_phone", "VARCHAR(50)"),

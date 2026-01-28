@@ -591,18 +591,24 @@ class ContractJournalService:
         # Сумма договора
         if contract_sum is not None:
             ctx["contract_sum"] = contract_sum
-            ctx["contract_sum_words"] = _number_to_words(contract_sum, currency="rub", skip_cents=True)
-            ctx["contract_sum_words_caps"] = _number_to_words(contract_sum, currency="rub", skip_cents=True).capitalize()
+            ctx["contract_sum_words"] = _number_to_words(contract_sum, currency="none")
+            ctx["contract_sum_words_caps"] = _number_to_words(contract_sum, currency="none").capitalize()
         else:
             ctx["contract_sum"] = ""
             ctx["contract_sum_words"] = ""
             ctx["contract_sum_words_caps"] = ""
 
-        # Склонения ФИО
+        # Образование слушателя
+        ctx["listener_education"] = listener.education or ""
+        ctx["education"] = listener.education or ""
+
+        # Склонения ФИО (с учётом пола)
+        gender = getattr(listener, 'gender', None) or 'M'
         decl = self.declension.get_all_declensions(
             listener.last_name or "",
             listener.first_name or "",
             listener.middle_name,
+            gender=gender,
         )
         ctx["listener_full_name_genitive"] = decl.get("full_name_genitive", "")
         ctx["full_name_genitive"] = decl.get("full_name_genitive", "")

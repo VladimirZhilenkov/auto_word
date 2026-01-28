@@ -46,7 +46,7 @@ class DeclensionService:
         self.morph = pymorphy3.MorphAnalyzer()
         self._cache = {}  # Cache for performance
     
-    def decline_word(self, word: str, case: str) -> str:
+    def decline_word(self, word: str, case: str, gender: str = None) -> str:
         """
         Decline a single word to the specified grammatical case.
         
@@ -54,6 +54,7 @@ class DeclensionService:
             word: The word to decline
             case: Case name ('nominative', 'genitive', 'dative', 
                   'accusative', 'instrumental', 'prepositional')
+            gender: Optional gender hint ('M' - male, 'F' - female, 'U' - undeclinable)
         
         Returns:
             Declined word preserving original capitalization
@@ -63,8 +64,12 @@ class DeclensionService:
         
         word = word.strip()
         
+        # If gender is 'U' (undeclinable), return word as-is
+        if gender == 'U':
+            return word
+        
         # Check cache
-        cache_key = (word.lower(), case)
+        cache_key = (word.lower(), case, gender)
         if cache_key in self._cache:
             result = self._cache[cache_key]
             # Restore original capitalization
@@ -78,11 +83,34 @@ class DeclensionService:
             return word
         
         try:
-            # Parse the word and get the best analysis
-            parsed = self.morph.parse(word)[0]
+            # Parse the word
+            parsed_variants = self.morph.parse(word)
             
-            # Try to inflect to the target case
-            inflected = parsed.inflect({case_grammeme})
+            # Try to find variant matching the specified gender
+            parsed = None
+            if gender:
+                gender_grammeme = 'masc' if gender == 'M' else 'femn' if gender == 'F' else None
+                if gender_grammeme:
+                    for variant in parsed_variants:
+                        if gender_grammeme in variant.tag:
+                            parsed = variant
+                            break
+            
+            # Fallback to first variant if no gender match
+            if parsed is None:
+                parsed = parsed_variants[0]
+            
+            # Try to inflect to the target case with gender hint
+            if gender:
+                gender_grammeme = 'masc' if gender == 'M' else 'femn' if gender == 'F' else None
+                if gender_grammeme:
+                    inflected = parsed.inflect({case_grammeme, gender_grammeme})
+                    if not inflected:
+                        inflected = parsed.inflect({case_grammeme})
+                else:
+                    inflected = parsed.inflect({case_grammeme})
+            else:
+                inflected = parsed.inflect({case_grammeme})
             
             if inflected:
                 result = inflected.word
@@ -103,7 +131,8 @@ class DeclensionService:
         last_name: str, 
         first_name: str, 
         middle_name: Optional[str], 
-        case: str
+        case: str,
+        gender: str = None
     ) -> str:
         """
         Decline a full name (ФИО) to the specified case.
@@ -113,17 +142,18 @@ class DeclensionService:
             first_name: Имя
             middle_name: Отчество (optional)
             case: Target grammatical case
+            gender: Gender hint ('M' - male, 'F' - female, 'U' - undeclinable)
         
         Returns:
             Declined full name as "Фамилия Имя Отчество"
         """
         parts = [
-            self.decline_word(last_name, case),
-            self.decline_word(first_name, case),
+            self.decline_word(last_name, case, gender),
+            self.decline_word(first_name, case, gender),
         ]
         
         if middle_name:
-            parts.append(self.decline_word(middle_name, case))
+            parts.append(self.decline_word(middle_name, case, gender))
         
         return " ".join(filter(None, parts))
     
@@ -131,7 +161,8 @@ class DeclensionService:
         self, 
         last_name: str, 
         first_name: str, 
-        middle_name: Optional[str] = None
+        middle_name: Optional[str] = None,
+        gender: str = None
     ) -> Dict[str, str]:
         """
         Get all case declensions for a name.
@@ -141,6 +172,7 @@ class DeclensionService:
             last_name: Фамилия
             first_name: Имя
             middle_name: Отчество (optional)
+            gender: Gender hint ('M' - male, 'F' - female, 'U' - undeclinable)
         
         Returns:
             Dictionary with all declension variants for templates:
@@ -156,15 +188,15 @@ class DeclensionService:
         for case_name in self.CASES.keys():
             # Full name in each case
             result[f'full_name_{case_name}'] = self.decline_full_name(
-                last_name, first_name, middle_name, case_name
+                last_name, first_name, middle_name, case_name, gender
             )
             
             # Individual name parts in each case
-            result[f'last_name_{case_name}'] = self.decline_word(last_name, case_name)
-            result[f'first_name_{case_name}'] = self.decline_word(first_name, case_name)
+            result[f'last_name_{case_name}'] = self.decline_word(last_name, case_name, gender)
+            result[f'first_name_{case_name}'] = self.decline_word(first_name, case_name, gender)
             
             if middle_name:
-                result[f'middle_name_{case_name}'] = self.decline_word(middle_name, case_name)
+                result[f'middle_name_{case_name}'] = self.decline_word(middle_name, case_name, gender)
             else:
                 result[f'middle_name_{case_name}'] = ""
         

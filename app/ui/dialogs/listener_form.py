@@ -120,6 +120,13 @@ class ListenerFormDialog(QDialog):
         self.edit_middle_name.setPlaceholderText("Введите отчество")
         name_layout.addRow("Отчество:", self.edit_middle_name)
         
+        # Gender selection
+        self.combo_gender = QComboBox()
+        self.combo_gender.addItem("Мужской", "M")
+        self.combo_gender.addItem("Женский", "F")
+        self.combo_gender.addItem("Не склонять фамилию", "U")
+        name_layout.addRow("Пол:", self.combo_gender)
+        
         # Birth date
         self.edit_birth_date = QDateEdit()
         self.edit_birth_date.setCalendarPopup(True)
@@ -170,6 +177,17 @@ class ListenerFormDialog(QDialog):
         program_layout.addWidget(self.btn_add_program)
         
         layout.addWidget(program_group)
+        
+        # Education group
+        education_group = QGroupBox("Образование")
+        education_layout = QVBoxLayout(education_group)
+        
+        self.edit_education = QTextEdit()
+        self.edit_education.setMaximumHeight(80)
+        self.edit_education.setPlaceholderText("Сведения об образовании (диплом, специальность, квалификация...)")
+        education_layout.addWidget(self.edit_education)
+        
+        layout.addWidget(education_group)
         
         # Notes group
         notes_group = QGroupBox("Примечания")
@@ -407,6 +425,12 @@ class ListenerFormDialog(QDialog):
         self.edit_first_name.setText(self.listener.first_name or '')
         self.edit_middle_name.setText(self.listener.middle_name or '')
         
+        # Gender
+        gender = self.listener.gender or 'M'
+        gender_index = self.combo_gender.findData(gender)
+        if gender_index >= 0:
+            self.combo_gender.setCurrentIndex(gender_index)
+        
         if self.listener.birth_date:
             self.chk_birth_date.setChecked(True)
             self.edit_birth_date.setDate(QDate(
@@ -418,6 +442,7 @@ class ListenerFormDialog(QDialog):
         self.edit_position.setText(self.listener.position or '')
         self.edit_workplace.setText(self.listener.workplace or '')
         self.edit_region.setText(self.listener.region or '')
+        self.edit_education.setPlainText(self.listener.education or '')
         self.edit_notes.setPlainText(self.listener.notes or '')
         
         # Load listener's program (first one if multiple)
@@ -501,7 +526,9 @@ class ListenerFormDialog(QDialog):
             'last_name': self.edit_last_name.text().strip(),
             'first_name': self.edit_first_name.text().strip(),
             'middle_name': self.edit_middle_name.text().strip() or None,
+            'gender': self.combo_gender.currentData(),
             'birth_date': None,
+            'education': self.edit_education.toPlainText().strip() or None,
             'position': self.edit_position.text().strip() or None,
             'workplace': self.edit_workplace.text().strip() or None,
             'region': self.edit_region.text().strip() or None,

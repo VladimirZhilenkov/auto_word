@@ -71,8 +71,14 @@ class Listener(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)  # Имя
     middle_name: Mapped[Optional[str]] = mapped_column(String(100))  # Отчество
     
+    # Пол: 'M' - мужской, 'F' - женский, 'U' - несклоняемая фамилия
+    gender: Mapped[Optional[str]] = mapped_column(String(1), default='M')  # Пол
+    
     # Дата рождения
     birth_date: Mapped[Optional[date]] = mapped_column(Date)  # Дата рождения
+    
+    # Образование
+    education: Mapped[Optional[str]] = mapped_column(Text)  # Образование
     
     # Рабочая информация
     position: Mapped[Optional[str]] = mapped_column(String(255))  # Должность
