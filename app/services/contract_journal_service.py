@@ -397,6 +397,52 @@ class ContractJournalService:
                 setattr(entry, k, v)
             return True
 
+    def regenerate_contract(
+        self,
+        contract_id: int,
+        template_name: str,
+        contract_date: date,
+        contract_sum: Optional[str] = None,
+        payment_type: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Regenerate contract document with new parameters.
+        Updates the journal entry and creates a new document.
+        
+        Returns the new document path on success, None on failure.
+        """
+        with DatabaseSession() as session:
+            entry: ContractJournal = session.query(ContractJournal).get(contract_id)
+            if not entry:
+                raise ValueError("Договор не найден")
+
+            listener = session.query(Listener).get(entry.listener_id) if entry.listener_id else None
+            program = session.query(Program).get(entry.program_id) if entry.program_id else None
+            
+            if not listener:
+                raise ValueError("Слушатель не найден")
+
+            # Generate new document
+            document_path = self._render_contract_document(
+                listener=listener,
+                program=program,
+                contract_number=entry.contract_number,
+                contract_date=contract_date,
+                template_name=template_name,
+                extra_context={},
+                contract_sum=contract_sum,
+            )
+
+            # Update entry
+            entry.contract_date = contract_date
+            entry.contract_sum = contract_sum
+            entry.payment_type = payment_type
+            entry.notes = notes
+            entry.document_path = document_path
+
+            return document_path
+
     def delete_contract(self, contract_id: int) -> bool:
         with DatabaseSession() as session:
             entry = session.query(ContractJournal).get(contract_id)

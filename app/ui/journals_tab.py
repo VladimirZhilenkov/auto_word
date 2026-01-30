@@ -20,6 +20,7 @@ from ..database.connection import DatabaseSession
 from ..database.models import Program, ProgramListener, Listener
 from .dialogs.journal_entry_dialog import JournalEntryDialog
 from .dialogs.contract_create_dialog import ContractCreateDialog
+from .dialogs.contract_edit_dialog import ContractEditDialog
 from ..services.order_journal_service import OrderJournalService, ORDER_TYPE_LABELS
 from ..services.contract_journal_service import ContractJournalService
 
@@ -514,6 +515,8 @@ class ContractJournalSubTab(QWidget):
         self.btn_export.clicked.connect(self._export_excel)
         self.btn_open_doc = QPushButton("Открыть договор")
         self.btn_open_doc.clicked.connect(self._open_document)
+        self.btn_edit = QPushButton("✏️ Редактировать")
+        self.btn_edit.clicked.connect(self._edit_contract)
         self.btn_delete = QPushButton("Удалить")
         self.btn_delete.clicked.connect(self._delete_selected)
         self.stats_label = QLabel("Всего: 0")
@@ -522,6 +525,7 @@ class ContractJournalSubTab(QWidget):
 
         btn_layout.addWidget(self.btn_export)
         btn_layout.addWidget(self.btn_open_doc)
+        btn_layout.addWidget(self.btn_edit)
         btn_layout.addWidget(self.btn_delete)
         btn_layout.addStretch()
         btn_layout.addWidget(self.stats_label)
@@ -535,6 +539,10 @@ class ContractJournalSubTab(QWidget):
         act_open = QAction("Открыть договор", self)
         act_open.triggered.connect(self._open_document)
         self.context_menu.addAction(act_open)
+
+        act_edit = QAction("✏️ Редактировать", self)
+        act_edit.triggered.connect(self._edit_contract)
+        self.context_menu.addAction(act_edit)
 
         self.context_menu.addSeparator()
 
@@ -735,6 +743,78 @@ class ContractJournalSubTab(QWidget):
                 subprocess.run(['xdg-open', str(p)])
         except Exception as exc:
             QMessageBox.warning(self, "Ошибка", f"Не удалось открыть файл: {exc}")
+
+    def _edit_contract(self):
+        """Edit selected contract - change date, sum, regenerate document."""
+        entry_id = self._get_selected_id()
+        if entry_id is None:
+            QMessageBox.information(self, "Информация", "Выберите договор для редактирования")
+            return
+
+        # Find contract data
+        contract = next((c for c in self._contracts if c['id'] == entry_id), None)
+        if not contract:
+            QMessageBox.warning(self, "Ошибка", "Договор не найден")
+            return
+
+        # Get available templates
+        templates = self.service.get_available_templates()
+
+        # Try to detect current template from document path
+        current_template = None
+        doc_path = contract.get('document_path')
+        if doc_path and templates:
+            # Just use first template as default
+            current_template = templates[0] if templates else None
+
+        # Show edit dialog
+        dialog = ContractEditDialog(
+            parent=self,
+            contract_data=contract,
+            templates=templates,
+            current_template=current_template,
+        )
+
+        if dialog.exec_():
+            data = dialog.get_data()
+
+            if dialog.should_regenerate():
+                # Regenerate document with new parameters
+                template = dialog.get_template()
+                if not template:
+                    QMessageBox.warning(self, "Ошибка", "Шаблон не выбран")
+                    return
+
+                try:
+                    new_path = self.service.regenerate_contract(
+                        contract_id=entry_id,
+                        template_name=template,
+                        contract_date=data['contract_date'],
+                        contract_sum=data.get('contract_sum'),
+                        payment_type=data.get('payment_type'),
+                        notes=data.get('notes'),
+                    )
+                    QMessageBox.information(
+                        self, "Готово",
+                        f"Договор пересоздан:\n{new_path}"
+                    )
+                    self.refresh_data()
+                except Exception as exc:
+                    QMessageBox.critical(self, "Ошибка", f"Ошибка пересоздания договора: {exc}")
+            else:
+                # Just update journal entry without regenerating document
+                try:
+                    self.service.update_contract(
+                        entry_id,
+                        contract_date=data['contract_date'],
+                        contract_sum=data.get('contract_sum'),
+                        payment_type=data.get('payment_type'),
+                        notes=data.get('notes'),
+                    )
+                    QMessageBox.information(self, "Готово", "Изменения сохранены")
+                    self.refresh_data()
+                except Exception as exc:
+                    QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения: {exc}")
 
     def _delete_selected(self):
         entry_id = self._get_selected_id()
