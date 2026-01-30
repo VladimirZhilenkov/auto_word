@@ -515,7 +515,7 @@ class ContractJournalSubTab(QWidget):
         self.btn_export.clicked.connect(self._export_excel)
         self.btn_open_doc = QPushButton("Открыть договор")
         self.btn_open_doc.clicked.connect(self._open_document)
-        self.btn_edit = QPushButton("✏️ Редактировать")
+        self.btn_edit = QPushButton("Редактировать")
         self.btn_edit.clicked.connect(self._edit_contract)
         self.btn_delete = QPushButton("Удалить")
         self.btn_delete.clicked.connect(self._delete_selected)
@@ -540,7 +540,7 @@ class ContractJournalSubTab(QWidget):
         act_open.triggered.connect(self._open_document)
         self.context_menu.addAction(act_open)
 
-        act_edit = QAction("✏️ Редактировать", self)
+        act_edit = QAction("Редактировать", self)
         act_edit.triggered.connect(self._edit_contract)
         self.context_menu.addAction(act_edit)
 
