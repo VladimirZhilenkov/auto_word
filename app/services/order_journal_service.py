@@ -22,9 +22,13 @@ from ..database.models import OrderJournal, Program
 
 
 ORDER_TYPE_LABELS = {
-    'enrollment': 'О зачислении',
-    'admission': 'О допуске к аттестации',
-    'graduation': 'Об отчислении',
+    'enrollment': 'О зачислении слушателей',
+    'admission': 'О допуске слушателей к итоговой аттестации',
+    'graduation': 'Об отчислении слушателей',
+    'thesis_topics': 'Об утверждении тем итоговых (аттестационных) работ и рецензентов',
+    'internship': 'О направлении на стажировку',
+    'theory_exam': 'О допуске к сдаче теоретического экзамена',
+    'theory_exam_retake': 'О допуске к повторной сдаче теоретического экзамена',
 }
 
 REVERSE_ORDER_TYPE_LABELS = {v: k for k, v in ORDER_TYPE_LABELS.items()}
@@ -182,28 +186,47 @@ class OrderJournalService:
             ws = wb.active
             ws.title = 'Журнал'
 
-            headers = ['Номер', 'Дата', 'Наименование', 'Исполнитель', 'Программа', 'Примечание']
-            ws.append(headers)
+            # Title row
+            type_label = ORDER_TYPE_LABELS.get(journal_type, 'Журнал приказов')
+            ws.merge_cells('A1:G1')
+            title_cell = ws.cell(row=1, column=1, value=f'Журнал приказов директора по личному составу слушателей')
+            title_cell.font = Font(bold=True, size=14)
+            title_cell.alignment = Alignment(horizontal='center')
 
-            # Header style
-            for col_idx in range(1, len(headers) + 1):
-                cell = ws.cell(row=1, column=col_idx)
+            ws.merge_cells('A2:G2')
+            subtitle_cell = ws.cell(row=2, column=1, value=f'Тип: {type_label}')
+            subtitle_cell.font = Font(bold=True, size=11)
+            subtitle_cell.alignment = Alignment(horizontal='center')
+
+            headers = ['№ п/п', 'Дата приказа', 'Номер приказа', 'Наименование (краткое содержание)', 'Программа', 'Ответственный исполнитель', 'Примечание']
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws.cell(row=4, column=col_idx, value=header)
                 cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal='center')
+                cell.alignment = Alignment(horizontal='center', wrap_text=True)
+                from openpyxl.styles import Border, Side
+                thin = Side(style='thin')
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
 
             # Data rows
-            for e in entries:
-                ws.append([
-                    e['order_number'],
+            for row_idx, e in enumerate(entries, start=5):
+                row_data = [
+                    row_idx - 4,
                     e['order_date'].strftime('%d.%m.%Y') if e['order_date'] else '',
+                    e['order_number'],
                     e['title'] or '',
-                    e['executor'] or '',
                     e['program_name'] or '',
+                    e['executor'] or '',
                     e['notes'] or '',
-                ])
+                ]
+                for col_idx, val in enumerate(row_data, 1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                    cell.alignment = Alignment(wrap_text=True)
+                    from openpyxl.styles import Border, Side
+                    thin = Side(style='thin')
+                    cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
 
             # Column widths
-            widths = [10, 12, 50, 25, 30, 40]
+            widths = [8, 14, 14, 50, 30, 25, 30]
             for i, w in enumerate(widths, start=1):
                 ws.column_dimensions[get_column_letter(i)].width = w
 

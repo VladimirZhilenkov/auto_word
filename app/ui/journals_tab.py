@@ -19,6 +19,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem, QBrush, QColor
 from ..database.connection import DatabaseSession
 from ..database.models import Program, ProgramListener, Listener
 from .dialogs.journal_entry_dialog import JournalEntryDialog
+from .dialogs.order_create_dialog import OrderCreateDialog
 from .dialogs.contract_create_dialog import ContractCreateDialog
 from .dialogs.contract_edit_dialog import ContractEditDialog
 from ..services.order_journal_service import OrderJournalService, ORDER_TYPE_LABELS
@@ -146,6 +147,10 @@ class OrderJournalSubTab(QWidget):
         # Button bar
         button_layout = QHBoxLayout()
 
+        self.btn_create_order = QPushButton("📝 Создать приказ")
+        self.btn_create_order.setStyleSheet("font-weight: bold;")
+        self.btn_create_order.clicked.connect(self._create_order)
+
         self.btn_add = QPushButton("Добавить запись вручную")
         self.btn_add.clicked.connect(self._add_entry)
 
@@ -163,6 +168,7 @@ class OrderJournalSubTab(QWidget):
 
         self.stats_label = QLabel("Всего записей: 0")
 
+        button_layout.addWidget(self.btn_create_order)
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_edit)
         button_layout.addWidget(self.btn_delete)
@@ -257,6 +263,13 @@ class OrderJournalSubTab(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", f"Не удалось добавить запись: {e}")
 
+    def _create_order(self):
+        """Open dialog to create a new order with Word document generation."""
+        dialog = OrderCreateDialog(parent=self)
+        dialog.exec_()
+        # Refresh after dialog closes (even if cancelled, in case order was created)
+        self.refresh_data()
+
     def _edit_selected(self):
         entry_id = self._get_selected_id()
         if entry_id is None:
@@ -312,9 +325,8 @@ class OrderJournalSubTab(QWidget):
         search_text = self.edit_search.text().strip() or None
 
         from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         type_label = ORDER_TYPE_LABELS.get(jtype, 'Журнал')
-        filename = f"Журнал_{type_label.replace(' ', '_')}_{timestamp}.xlsx"
+        filename = f"Журнал_приказов_директора_по_личному_составу_слушателей_{type_label.replace(' ', '_')}.xlsx"
 
         from PyQt5.QtWidgets import QFileDialog
         output_path, _ = QFileDialog.getSaveFileName(

@@ -33,9 +33,13 @@ class DocumentGenerator:
     
     # Predefined template types
     TEMPLATE_TYPES = {
-        'enrollment': 'О_зачислении.docx',      # О зачислении
-        'admission': 'О_допуске.docx',           # О допуске к аттестации
-        'graduation': 'Об_отчислении.docx',      # Об отчислении
+        'enrollment': 'О_зачислении.docx',
+        'admission': 'О_допуске.docx',
+        'graduation': 'Об_отчислении.docx',
+        'thesis_topics': 'Об_утверждении_тем.docx',
+        'internship': 'О_направлении_на_стажировку.docx',
+        'theory_exam': 'О_допуске_к_экзамену.docx',
+        'theory_exam_retake': 'О_допуске_к_повторному_экзамену.docx',
     }
     
     def __init__(
@@ -368,7 +372,21 @@ class DocumentGenerator:
             template_path = self._resolve_template_path(template_name)
         
         if not template_path.exists():
-            raise FileNotFoundError(f"Шаблон не найден: {template_path}")
+            # Try generic order template as fallback
+            generic_path = self._resolve_template_path('Приказ.docx')
+            if generic_path.exists():
+                template_path = generic_path
+            else:
+                # Generate basic order document without template
+                return self._generate_basic_order(
+                    order_type=order_type,
+                    listeners_data=listeners_data,
+                    order_number=order_number,
+                    order_date=order_date,
+                    program_name=program_name,
+                    custom_context=custom_context,
+                    output_filename=output_filename,
+                )
         
         doc = DocxTemplate(template_path)
         
@@ -424,6 +442,10 @@ class DocumentGenerator:
                 'enrollment': 'О_зачислении',
                 'admission': 'О_допуске',
                 'graduation': 'Об_отчислении',
+                'thesis_topics': 'Об_утверждении_тем',
+                'internship': 'О_направлении_на_стажировку',
+                'theory_exam': 'О_допуске_к_экзамену',
+                'theory_exam_retake': 'О_допуске_к_повторному_экзамену',
                 'custom': 'Документ'
             }
             type_name = type_names.get(order_type, 'Документ')
@@ -437,6 +459,155 @@ class DocumentGenerator:
         
         doc.save(output_path)
         
+        return str(output_path)
+
+    def _generate_basic_order(
+        self,
+        order_type: str,
+        listeners_data: List[Dict[str, Any]],
+        order_number: str,
+        order_date: datetime,
+        program_name: str = "",
+        custom_context: Optional[Dict[str, Any]] = None,
+        output_filename: Optional[str] = None,
+    ) -> str:
+        """
+        Generate a basic order Word document without a template.
+        Uses python-docx directly to create the document.
+        """
+        from docx import Document
+        from docx.shared import Pt, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+
+        from ..services.order_journal_service import ORDER_TYPE_LABELS
+
+        doc = Document()
+
+        # Page margins
+        for section in doc.sections:
+            section.top_margin = Cm(2)
+            section.bottom_margin = Cm(2)
+            section.left_margin = Cm(3)
+            section.right_margin = Cm(1.5)
+
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Times New Roman'
+        font.size = Pt(14)
+
+        order_type_label = ''
+        if custom_context:
+            order_type_label = custom_context.get('order_type_label', '')
+        if not order_type_label:
+            order_type_label = ORDER_TYPE_LABELS.get(order_type, 'Приказ')
+
+        # Header
+        header_para = doc.add_paragraph()
+        header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = header_para.add_run('ПРИКАЗ')
+        run.bold = True
+        run.font.size = Pt(16)
+        run.font.name = 'Times New Roman'
+
+        # Order details
+        date_str = format_date_russian(order_date) if order_date else ''
+        details_para = doc.add_paragraph()
+        details_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = details_para.add_run(f'№ {order_number} от {date_str}')
+        run.font.size = Pt(14)
+        run.font.name = 'Times New Roman'
+
+        # Order type
+        type_para = doc.add_paragraph()
+        type_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = type_para.add_run(f'«{order_type_label}»')
+        run.bold = True
+        run.font.size = Pt(14)
+        run.font.name = 'Times New Roman'
+
+        # Program
+        if program_name:
+            prog_para = doc.add_paragraph()
+            prog_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run = prog_para.add_run(f'по программе: {program_name}')
+            run.font.size = Pt(13)
+            run.font.name = 'Times New Roman'
+
+        doc.add_paragraph()  # Empty line
+
+        # Listeners table
+        if listeners_data:
+            table = doc.add_table(rows=1, cols=4)
+            table.style = 'Table Grid'
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+            # Header row
+            headers = ['№ п/п', 'ФИО', 'Должность', 'Место работы']
+            for i, header_text in enumerate(headers):
+                cell = table.rows[0].cells[i]
+                cell.text = header_text
+                run = cell.paragraphs[0].runs[0]
+                run.bold = True
+                run.font.size = Pt(12)
+                run.font.name = 'Times New Roman'
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # Data rows
+            for idx, listener in enumerate(listeners_data, start=1):
+                row = table.add_row()
+                row.cells[0].text = str(idx)
+                row.cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                full_name = listener.get('full_name', '')
+                if not full_name:
+                    parts = [
+                        listener.get('last_name', ''),
+                        listener.get('first_name', ''),
+                        listener.get('middle_name', '') or '',
+                    ]
+                    full_name = ' '.join(p for p in parts if p)
+                row.cells[1].text = full_name
+
+                row.cells[2].text = listener.get('position', '') or ''
+                row.cells[3].text = listener.get('workplace', '') or listener.get('court_name', '') or ''
+
+                # Set font for all cells in the row
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.size = Pt(12)
+                            run.font.name = 'Times New Roman'
+
+            # Set column widths
+            try:
+                from docx.shared import Inches
+                widths = [Cm(1.5), Cm(6), Cm(4), Cm(5)]
+                for row in table.rows:
+                    for idx_c, width in enumerate(widths):
+                        row.cells[idx_c].width = width
+            except Exception:
+                pass
+
+        # Generate output filename
+        if output_filename:
+            output_path = self.output_dir / output_filename
+        else:
+            type_names = {
+                'enrollment': 'О_зачислении',
+                'admission': 'О_допуске',
+                'graduation': 'Об_отчислении',
+                'thesis_topics': 'Об_утверждении_тем',
+                'internship': 'О_направлении_на_стажировку',
+                'theory_exam': 'О_допуске_к_экзамену',
+                'theory_exam_retake': 'О_допуске_к_повторному_экзамену',
+            }
+            type_name = type_names.get(order_type, 'Приказ')
+            output_name = f"{order_number}_{order_date.strftime('%d.%m.%Y')}_{type_name}.docx"
+            output_path = self.output_dir / output_name
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        doc.save(output_path)
         return str(output_path)
 
     def generate_batch(
