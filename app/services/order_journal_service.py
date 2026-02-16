@@ -281,21 +281,12 @@ class OrderJournalService:
 
     def delete_order_entry(self, order_id: int) -> bool:
         """
-        Delete entry by id. Optional restriction: if document_path exists, prevent deletion.
+        Delete entry by id.
         """
         with DatabaseSession() as session:
             entry = session.query(OrderJournal).get(order_id)
             if not entry:
                 return False
-
-            # Optional protection: do not delete if linked document exists
-            if entry.document_path:
-                try:
-                    if Path(entry.document_path).exists():
-                        return False
-                except Exception:
-                    # If any error checking path, fall back to allowing delete
-                    pass
 
             session.delete(entry)
             return True

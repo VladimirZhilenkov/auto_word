@@ -85,10 +85,38 @@ class OrderCreateDialog(QDialog):
         self.edit_order_date.setDate(QDate.currentDate())
         details_layout.addRow("Дата приказа:", self.edit_order_date)
 
-        # Executor
+        # Program type
+        self.combo_program_type = QComboBox()
+        self.combo_program_type.addItem("повышения квалификации", "повышения квалификации")
+        self.combo_program_type.addItem("профессиональной переподготовки", "профессиональной переподготовки")
+        details_layout.addRow("Вид программы:", self.combo_program_type)
+
+        # Education form
+        self.combo_education_form = QComboBox()
+        self.combo_education_form.addItem("очная", "очная")
+        self.combo_education_form.addItem("заочная", "заочная")
+        self.combo_education_form.addItem("очно-заочная", "очно-заочная")
+        details_layout.addRow("Форма обучения:", self.combo_education_form)
+
+        # Executor position
+        self.combo_executor_position = QComboBox()
+        self.combo_executor_position.setEditable(True)
+        self.combo_executor_position.addItem(
+            "Диспетчер факультета повышения квалификации и переподготовки судей, "
+            "государственных гражданских служащих судов и Судебного департамента "
+            "(ФПК судей и госслужащих судов)"
+        )
+        self.combo_executor_position.addItem(
+            "Специалист по учебной работе I категории факультета повышения квалификации и переподготовки судей, "
+            "государственных гражданских служащих судов и Судебного департамента "
+            "(ФПК судей и госслужащих судов)"
+        )
+        details_layout.addRow("Должность исполнителя:", self.combo_executor_position)
+
+        # Executor name
         self.edit_executor = QLineEdit()
-        self.edit_executor.setPlaceholderText("Ответственный исполнитель")
-        details_layout.addRow("Исполнитель:", self.edit_executor)
+        self.edit_executor.setPlaceholderText("ФИО исполнителя")
+        details_layout.addRow("Имя исполнителя:", self.edit_executor)
 
         layout.addWidget(details_group)
 
@@ -402,6 +430,13 @@ class OrderCreateDialog(QDialog):
         # Determine template
         selected_template = self.combo_template.currentData()  # None = auto
 
+        # Collect extra context from new fields
+        education_form = self.combo_education_form.currentData() or ''
+        program_type = self.combo_program_type.currentData() or ''
+        executor_position = self.combo_executor_position.currentText().strip()
+        executor_name = self.edit_executor.text().strip()
+        executor_full = f"{executor_position} {executor_name}".strip() if executor_position else executor_name
+
         try:
             file_path = self.generator.generate_order(
                 order_type=order_type,
@@ -412,9 +447,15 @@ class OrderCreateDialog(QDialog):
                 start_date=start_datetime,
                 end_date=end_datetime,
                 hours=self.spin_hours.value(),
+                education_form=education_form,
                 template_name=selected_template,
                 custom_context={
                     'order_type_label': order_type_label,
+                    'program_type': program_type,
+                    'program_id': prog_id,
+                    'executor_position': executor_position,
+                    'executor_name': executor_name,
+                    'executor_full': executor_full,
                 },
             )
 
@@ -428,7 +469,7 @@ class OrderCreateDialog(QDialog):
                         title=f"Приказ «{order_type_label}» №{order_number}",
                         program_id=prog_id,
                         program_name=program_name,
-                        executor=self.edit_executor.text().strip(),
+                        executor=executor_full,
                         order_date=order_date,
                         notes=f"Слушателей: {len(selected_listeners)}",
                         document_path=file_path,

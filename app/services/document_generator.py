@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from docxtpl import DocxTemplate
 
-from ..database.models import Listener, Program, ProgramListener
+from ..database.models import Listener, Program, ProgramListener, ContractJournal
+from ..database.connection import DatabaseSession
 from .declension import DeclensionService, get_declension_service
 from .document_registration import DocumentRegistrationService
 
@@ -411,12 +412,42 @@ class DocumentGenerator:
             'stream_name': stream_name,
             'hours': str(hours),
             'education_form': education_form,
+            'education_form_genitive': self._get_education_form_genitive(education_form),
             'education_format': education_format,
-            
-            # Listeners list for table
-            'listeners': listeners_data,
-            'listeners_count': len(listeners_data),
         }
+
+        # Listeners list for table - add order_number and contract data
+        enriched_listeners = []
+        for idx, ld in enumerate(listeners_data, start=1):
+            enriched = {**ld, 'order_number': idx}
+            # Default empty contract fields
+            enriched.setdefault('contract_number', '')
+            enriched.setdefault('contract_date', '')
+            enriched_listeners.append(enriched)
+
+        # Enrich listeners with contract data from ContractJournal
+        program_id = (custom_context or {}).get('program_id')
+        if program_id:
+            try:
+                with DatabaseSession() as session:
+                    for el in enriched_listeners:
+                        lid = el.get('id')
+                        if lid:
+                            contract = session.query(ContractJournal).filter(
+                                ContractJournal.listener_id == lid,
+                                ContractJournal.program_id == program_id,
+                            ).order_by(ContractJournal.contract_number.desc()).first()
+                            if contract:
+                                el['contract_number'] = contract.contract_number
+                                el['contract_date'] = (
+                                    contract.contract_date.strftime('%d.%m.%Y')
+                                    if contract.contract_date else ''
+                                )
+            except Exception:
+                pass  # If lookup fails, leave defaults
+
+        context['listeners'] = enriched_listeners
+        context['listeners_count'] = len(listeners_data)
         
         # Add start/end dates if provided
         if start_date:
@@ -431,8 +462,10 @@ class DocumentGenerator:
         if custom_context:
             context.update(custom_context)
         
-        # Render document
-        doc.render(context)
+        # Render document with jinja2 loop support
+        import jinja2 as _jinja2
+        jinja_env = _jinja2.Environment(extensions=['jinja2.ext.loopcontrols'])
+        doc.render(context, jinja_env=jinja_env)
         
         # Generate output filename
         if output_filename:
@@ -844,7 +877,20 @@ class DocumentGenerator:
             'current_day': now.strftime("%d"),
             'generation_datetime': now.strftime("%d.%m.%Y %H:%M:%S"),
         }
-    
+
+    @staticmethod
+    def _get_education_form_genitive(form: str) -> str:
+        """Get genitive case of education form (родительный падеж формы обучения)."""
+        mapping = {
+            'очная': 'очной',
+            'заочная': 'заочной',
+            'очно-заочная': 'очно-заочной',
+            'Очная': 'Очной',
+            'Заочная': 'Заочной',
+            'Очно-заочная': 'Очно-заочной',
+        }
+        return mapping.get(form, form)
+
     def _sanitize_filename(self, name: str) -> str:
         """Remove invalid characters from filename."""
         if not name:

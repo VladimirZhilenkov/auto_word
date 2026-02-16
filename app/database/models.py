@@ -306,7 +306,7 @@ class OrderJournal(Base):
     __tablename__ = 'order_journal'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    journal_type: Mapped[str] = mapped_column(String(50), nullable=False)  # enrollment/admission/graduation
+    journal_type: Mapped[str] = mapped_column(String(50), nullable=False)  # enrollment/admission/graduation/thesis_topics/internship/theory_exam/theory_exam_retake
     order_number: Mapped[int] = mapped_column(Integer, nullable=False)  # Порядковый номер в журнале для типа
     order_date: Mapped[date] = mapped_column(Date, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)  # Наименование/краткое содержание
