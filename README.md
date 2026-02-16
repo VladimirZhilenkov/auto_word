@@ -183,6 +183,12 @@ auto_word/
 | `{{ order_month }}` | Месяц (текстом) |
 | `{{ order_year }}` | Год |
 | `{{ order_type_label }}` | Тип приказа (текст) |
+| `{{ program_type }}` | Тип программы (повышения квалификации / профессиональной переподготовки) |
+| `{{ education_form }}` | Форма обучения (очная / заочная / очно-заочная) |
+| `{{ education_form_genitive }}` | Форма обучения в родительном падеже (очной / заочной / очно-заочной) |
+| `{{ executor_position }}` | Должность исполнителя |
+| `{{ executor_name }}` | ФИО исполнителя |
+| `{{ executor_full }}` | Должность + ФИО исполнителя |
 | `{{ contract_type }}` | Тип договора |
 | `{{ contract_number }}` | Номер договора |
 | `{{ contract_date }}` | Дата договора |
@@ -204,12 +210,17 @@ auto_word/
 Для создания таблиц используйте переменные с префиксом `listener.`:
 
 ```
-{{ loop.index }}           — № п/п
-{{ listener.full_name }}   — ФИО
-{{ listener.position }}    — Должность
-{{ listener.court_name }}  — Суд
-{{ listener.region }}      — Регион
+{{ loop.index }}                — № п/п (через Jinja2)
+{{ listener.order_number }}     — № п/п (числовое поле)
+{{ listener.full_name }}        — ФИО
+{{ listener.position }}         — Должность
+{{ listener.court_name }}       — Суд
+{{ listener.region }}           — Регион
+{{ listener.contract_number }}  — Номер договора слушателя
+{{ listener.contract_date }}    — Дата договора слушателя
 ```
+
+> **Примечание:** `contract_number` и `contract_date` подтягиваются автоматически из журнала договоров по слушателю и программе.
 
 ## Резервное копирование
 
