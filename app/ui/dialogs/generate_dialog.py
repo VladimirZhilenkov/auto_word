@@ -277,70 +277,32 @@ class GenerateDialog(QDialog):
         if not template_name or template_name == "-- Нет шаблонов --":
             QMessageBox.warning(self, "Предупреждение", "Выберите шаблон")
             return
-        
-        tpl_path = self.generator.templates_dir / template_name
-        
-        if not tpl_path.exists():
-            QMessageBox.critical(self, "Ошибка", f"Файл шаблона не найден: {tpl_path}")
-            return
-        
-        try:
-            with zipfile.ZipFile(tpl_path, 'r') as z:
-                xml = z.read('word/document.xml').decode('utf-8')
-            
-            # Check if loop already exists
-            if '{% for listener' in xml:
-                QMessageBox.information(
-                    self, "Информация", 
-                    "✅ Цикл уже есть в шаблоне.\nШаблон готов к использованию."
-                )
-                return
-            
-            # Find table row with listener or loop variables
-            tr_pattern = r'(<w:tr\b[^>]*>.*?</w:tr>)'
-            matches = list(re.finditer(tr_pattern, xml, re.DOTALL))
-            
-            found = False
-            for match in matches:
-                tr_content = match.group(1)
-                if 'loop' in tr_content or 'listener' in tr_content:
-                    new_tr = '{% for listener in listeners %}' + tr_content + '{% endfor %}'
-                    xml = xml.replace(tr_content, new_tr, 1)
-                    found = True
-                    break
-            
-            if not found:
-                QMessageBox.warning(
-                    self, "Предупреждение",
-                    "Не найдена строка таблицы с переменными listener или loop.\n\n"
-                    "Убедитесь, что в шаблоне есть строка таблицы с переменными:\n"
-                    "• {{ loop.index }}\n"
-                    "• {{ listener.full_name }}\n"
-                    "• {{ listener.position }}\n"
-                    "• и т.д."
-                )
-                return
-            
-            # Save modified template
-            tmp_path = str(tpl_path) + '.tmp'
-            with zipfile.ZipFile(tpl_path, 'r') as zin:
-                with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zout:
-                    for item in zin.infolist():
-                        if item.filename == 'word/document.xml':
-                            zout.writestr(item, xml.encode('utf-8'))
-                        else:
-                            zout.writestr(item, zin.read(item.filename))
-            
-            shutil.move(tmp_path, tpl_path)
-            
+
+        result = self.generator.fix_template_loop(template_name)
+
+        if result['status'] == 'fixed':
             QMessageBox.information(
                 self, "Успех",
                 f"✅ Цикл добавлен в шаблон!\n\n"
                 f"Теперь шаблон '{template_name}' готов к генерации документов со списком слушателей."
             )
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Ошибка при исправлении шаблона:\n{e}")
+        elif result['status'] == 'already_ok':
+            QMessageBox.information(
+                self, "Информация",
+                "✅ Цикл уже есть в шаблоне.\nШаблон готов к использованию."
+            )
+        elif result['status'] == 'no_vars':
+            QMessageBox.warning(
+                self, "Предупреждение",
+                "Не найдена строка таблицы с переменными listener или loop.\n\n"
+                "Убедитесь, что в шаблоне есть строка таблицы с переменными:\n"
+                "• {{ loop.index }}\n"
+                "• {{ listener.full_name }}\n"
+                "• {{ listener.position }}\n"
+                "• и т.д."
+            )
+        else:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка при исправлении шаблона:\n{result['message']}")
     
     def _load_data(self):
         """Load listeners and programs from database."""

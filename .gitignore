@@ -72,6 +72,7 @@ Desktop.ini
 
 # Project specific
 data/
+output/
 output/*.docx
 *.log
 listener_data.xlsx
@@ -83,3 +84,4 @@ templates
 *.tmp
 *.temp
 ~$*.docx
+Приказ о зачислении_с ФЛ (2).docx

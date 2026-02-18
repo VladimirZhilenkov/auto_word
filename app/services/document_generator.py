@@ -57,7 +57,7 @@ class DocumentGenerator:
         """
         app_dir = get_app_dir()
         self.templates_dir = Path(templates_dir) if templates_dir else app_dir / "templates"
-        self.output_dir = Path(output_dir) if output_dir else app_dir / "docx_files"
+        self.output_dir = Path(output_dir) if output_dir else app_dir / "output"
         
         # Ensure directories exist
         self.templates_dir.mkdir(parents=True, exist_ok=True)
@@ -416,9 +416,15 @@ class DocumentGenerator:
             'education_format': education_format,
         }
 
+        # Sort listeners alphabetically by last_name (then full_name as fallback)
+        sorted_listeners = sorted(
+            listeners_data,
+            key=lambda ld: (ld.get('last_name') or ld.get('full_name') or '').lower()
+        )
+
         # Listeners list for table - add order_number and contract data
         enriched_listeners = []
-        for idx, ld in enumerate(listeners_data, start=1):
+        for idx, ld in enumerate(sorted_listeners, start=1):
             enriched = {**ld, 'order_number': idx}
             # Default empty contract fields
             enriched.setdefault('contract_number', '')
@@ -968,6 +974,86 @@ class DocumentGenerator:
             return sorted(set(variables))
         except Exception:
             return []
+
+
+    def fix_template_loop(self, template_name: str) -> dict:
+        """
+        Add {% for listener in listeners %} loop to a template if missing.
+        
+        Args:
+            template_name: Template filename
+        
+        Returns:
+            dict with keys: 'status' ('fixed', 'already_ok', 'no_vars', 'error'),
+                            'message' (str)
+        """
+        import re as _re
+        import zipfile as _zipfile
+        import shutil as _shutil
+
+        tpl_path = self._resolve_template_path(template_name)
+
+        if not tpl_path.exists():
+            return {'status': 'error', 'message': f'Файл не найден: {tpl_path}'}
+
+        try:
+            with _zipfile.ZipFile(tpl_path, 'r') as z:
+                xml = z.read('word/document.xml').decode('utf-8')
+
+            # Already has the loop
+            if '{% for listener' in xml or '{%- for listener' in xml:
+                return {'status': 'already_ok', 'message': 'Цикл уже есть'}
+
+            # Find table row containing listener/loop variables
+            tr_pattern = r'(<w:tr\b[^>]*>.*?</w:tr>)'
+            matches = list(_re.finditer(tr_pattern, xml, _re.DOTALL))
+
+            found = False
+            for match in matches:
+                tr_content = match.group(1)
+                if 'loop' in tr_content or 'listener' in tr_content:
+                    new_tr = '{% for listener in listeners %}' + tr_content + '{% endfor %}'
+                    xml = xml.replace(tr_content, new_tr, 1)
+                    found = True
+                    break
+
+            if not found:
+                return {
+                    'status': 'no_vars',
+                    'message': 'Нет строки таблицы с переменными listener/loop'
+                }
+
+            # Save modified template
+            tmp_path = str(tpl_path) + '.tmp'
+            with _zipfile.ZipFile(tpl_path, 'r') as zin:
+                with _zipfile.ZipFile(tmp_path, 'w', _zipfile.ZIP_DEFLATED) as zout:
+                    for item in zin.infolist():
+                        if item.filename == 'word/document.xml':
+                            zout.writestr(item, xml.encode('utf-8'))
+                        else:
+                            zout.writestr(item, zin.read(item.filename))
+
+            _shutil.move(tmp_path, str(tpl_path))
+
+            return {'status': 'fixed', 'message': 'Цикл добавлен'}
+
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    def fix_all_templates(self) -> List[dict]:
+        """
+        Fix all templates in templates/ folder by adding the
+        {% for listener in listeners %} loop where missing.
+        
+        Returns:
+            List of dicts: [{'name': str, 'status': str, 'message': str}, ...]
+        """
+        templates = self.get_available_templates()
+        results = []
+        for tpl in templates:
+            res = self.fix_template_loop(tpl)
+            results.append({'name': tpl, **res})
+        return results
 
 
 class DocumentGeneratorError(Exception):

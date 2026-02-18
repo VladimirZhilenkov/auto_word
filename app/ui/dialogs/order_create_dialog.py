@@ -139,6 +139,14 @@ class OrderCreateDialog(QDialog):
         self.btn_refresh_templates.clicked.connect(self._load_templates)
         tpl_layout.addWidget(self.btn_refresh_templates)
 
+        self.btn_fix_templates = QPushButton("🔧 Исправить все шаблоны")
+        self.btn_fix_templates.setToolTip(
+            "Добавить цикл {% for listener in listeners %} во все шаблоны,\n"
+            "где он отсутствует (необходим для корректной генерации)"
+        )
+        self.btn_fix_templates.clicked.connect(self._fix_all_templates)
+        tpl_layout.addWidget(self.btn_fix_templates)
+
         layout.addWidget(tpl_group)
 
         # Program selection
@@ -505,6 +513,59 @@ class OrderCreateDialog(QDialog):
             QMessageBox.critical(self, "Ошибка", f"Ошибка генерации: {e}")
         finally:
             self.btn_generate.setEnabled(True)
+
+    def _fix_all_templates(self):
+        """Fix all templates by adding {% for listener in listeners %} loop."""
+        reply = QMessageBox.question(
+            self, "Исправление шаблонов",
+            "Будет выполнено автоматическое исправление всех шаблонов:\n\n"
+            "• Добавление цикла {% for listener in listeners %} в строки таблиц,\n"
+            "  содержащие переменные listener/loop.\n\n"
+            "Продолжить?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        QApplication.processEvents()
+        results = self.generator.fix_all_templates()
+
+        if not results:
+            QMessageBox.information(
+                self, "Информация",
+                "В папке templates/ нет шаблонов .docx"
+            )
+            return
+
+        fixed = [r for r in results if r['status'] == 'fixed']
+        already = [r for r in results if r['status'] == 'already_ok']
+        no_vars = [r for r in results if r['status'] == 'no_vars']
+        errors = [r for r in results if r['status'] == 'error']
+
+        lines = []
+        if fixed:
+            lines.append(f"✅ Исправлено: {len(fixed)}")
+            for r in fixed:
+                lines.append(f"   • {r['name']}")
+        if already:
+            lines.append(f"\nℹ️ Уже содержат цикл: {len(already)}")
+            for r in already:
+                lines.append(f"   • {r['name']}")
+        if no_vars:
+            lines.append(f"\n⚠ Без переменных listener/loop: {len(no_vars)}")
+            for r in no_vars:
+                lines.append(f"   • {r['name']}")
+        if errors:
+            lines.append(f"\n❌ Ошибки: {len(errors)}")
+            for r in errors:
+                lines.append(f"   • {r['name']}: {r['message']}")
+
+        msg = "\n".join(lines)
+        QMessageBox.information(self, "Результат исправления шаблонов", msg)
+
+        # Refresh templates list
+        self._load_templates()
 
     def _open_output_folder(self):
         """Open the output folder in file manager."""
