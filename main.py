@@ -82,7 +82,7 @@ def create_application():
     
     # Set application metadata
     app.setApplicationName("Генератор документов")
-    app.setApplicationVersion("2.2.2")
+    app.setApplicationVersion("2.3.2")
     app.setOrganizationName("Document Generator")
     
     # Set application style
@@ -120,7 +120,7 @@ def check_updates_silently(window):
 def main():
     """Main entry point."""
     print("=" * 50)
-    print("Генератор документов v2.2.2")
+    print("Генератор документов v2.3.2")
     print("=" * 50)
     
     # Setup environment

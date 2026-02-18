@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
     """
     
     APP_TITLE = "Генератор документов"
-    APP_VERSION = "2.2.2"
+    APP_VERSION = "2.3.2"
     
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
