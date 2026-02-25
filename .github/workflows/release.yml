@@ -25,64 +25,25 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
-      - name: Build with PyInstaller (onedir)
+      - name: Build with PyInstaller
         run: |
           pyinstaller build_windows.spec
       
       - name: List dist folder
         run: |
-          echo "=== dist ===" && dir dist
-          echo "=== dist\DocumentGenerator ===" && dir dist\DocumentGenerator
+          dir dist
         shell: cmd
       
-      - name: Create ZIP archive (for onedir users)
+      - name: Create ZIP archive
         run: |
-          # ВАЖНО: архивируем СОДЕРЖИМОЕ папки DocumentGenerator,
-          # чтобы внутри ZIP файлы лежали плоско (без вложенной папки).
-          # Старый update_service делает Expand-Archive прямо в app_dir.
-          Push-Location dist\DocumentGenerator
-          Compress-Archive -Path * -DestinationPath "..\..\AutoWord-${{ github.ref_name }}.zip"
-          Pop-Location
+          Compress-Archive -Path dist\* -DestinationPath AutoWord-${{ github.ref_name }}.zip
         shell: pwsh
       
-      - name: Verify ZIP contents
-        run: |
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [System.IO.Compression.ZipFile]::OpenRead("AutoWord-${{ github.ref_name }}.zip")
-          $names = $zip.Entries.FullName
-          Write-Host "ZIP contains $($names.Count) entries. Top-level:"
-          $names | Where-Object { $_ -notlike '*/*' -or $_ -like '*/' } | Select-Object -First 20
-          $zip.Dispose()
-          if ($names -notcontains 'DocumentGenerator.exe') {
-            throw 'DocumentGenerator.exe не найден на верхнем уровне ZIP!'
-          }
-          Write-Host "OK: ZIP structure is correct (flat)"
-        shell: pwsh
-      
-      - name: Build standalone EXE (onefile, for v2.4.2 compat)
-        run: |
-          pyinstaller --onefile --noconsole --name DocumentGenerator `
-            --add-data "templates;templates" `
-            --add-data "app;app" `
-            --hidden-import packaging `
-            --hidden-import packaging.version `
-            --hidden-import certifi `
-            --hidden-import sqlalchemy.dialects.sqlite `
-            --hidden-import pymorphy3 `
-            --hidden-import pymorphy3_dicts_ru `
-            --hidden-import dawg_python `
-            --distpath dist_onefile `
-            main.py
-          Copy-Item "dist_onefile\DocumentGenerator.exe" "DocumentGenerator-${{ github.ref_name }}.exe"
-        shell: pwsh
-      
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: AutoWord-Windows
-          path: |
-            AutoWord-${{ github.ref_name }}.zip
-            DocumentGenerator-${{ github.ref_name }}.exe
+          path: AutoWord-${{ github.ref_name }}.zip
 
   create-release:
     needs: build-windows
@@ -103,20 +64,15 @@ jobs:
           body: |
             ## AutoWord ${{ github.ref_name }}
             
-            ### Скачать
-            - **`AutoWord-${{ github.ref_name }}.zip`** — стандартный вариант (папка с программой)
-            - **`DocumentGenerator-${{ github.ref_name }}.exe`** — один файл (портативный вариант)
-            
             ### Установка
-            1. Скачайте ZIP или EXE
-            2. Распакуйте в любую папку (или поместите exe)
+            1. Скачайте `AutoWord-${{ github.ref_name }}.zip`
+            2. Распакуйте в любую папку
             3. Запустите `DocumentGenerator.exe`
             
             ### Обновление
             Программа обновляется автоматически через меню «Справка → Проверить обновления».
           files: |
             AutoWord-${{ github.ref_name }}.zip
-            DocumentGenerator-${{ github.ref_name }}.exe
           draft: false
           prerelease: false
         env:

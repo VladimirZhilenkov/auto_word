@@ -1,10 +1,6 @@
 """
 Update service for checking, downloading, and applying application updates.
 Uses GitHub Releases API for version checking.
-
-IMPORTANT: The release ZIP must contain files at the TOP level (no nested folder).
-This is critical because the old deployed versions use Expand-Archive directly
-into app_dir. If the ZIP has a subdirectory, the extraction breaks the app.
 """
 
 from __future__ import annotations
@@ -51,6 +47,9 @@ class UpdateService:
     GITHUB_REPO = "VladimirZhilenkov/auto_word"
     GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
+    # Имя файла для скачивания (должно совпадать с asset в Release)
+    ASSET_NAME = "AutoWord.zip"
+
     # Таймаут для запросов (секунды)
     TIMEOUT = 10
 
@@ -92,9 +91,14 @@ class UpdateService:
         except Exception as exc:
             return {"available": False, "error": f"Не удалось проверить обновления: {exc}"}
 
+        # Получаем версию из tag_name (например "v2.1.0" -> "2.1.0")
         tag = data.get("tag_name", "")
         remote_version = tag.lstrip("v") if tag else "0.0.0"
+
+        # Changelog из body релиза
         changelog = data.get("body") or ""
+
+        # Ищем нужный asset для скачивания
         download_url = self._find_asset_url(data.get("assets", []))
 
         try:
@@ -112,26 +116,20 @@ class UpdateService:
         }
 
     def _find_asset_url(self, assets: list) -> Optional[str]:
-        """Find download URL for the ZIP asset.
-        
-        For onedir builds (current default), prefer .zip archives.
-        The ZIP must have flat structure (no nested subdirectory).
-        """
+        """Find download URL for the target asset."""
         for asset in assets:
             name = asset.get("name", "")
-            if name.endswith(".zip"):
-                return asset.get("browser_download_url")
-        # Fallback: .exe (onefile builds)
-        for asset in assets:
-            name = asset.get("name", "")
-            if name.endswith(".exe"):
+            # Ищем ZIP или EXE файл
+            if name == self.ASSET_NAME or name.endswith(".zip") or name.endswith(".exe"):
                 return asset.get("browser_download_url")
         return None
 
     def download_update(self, url: str, progress_callback: Callable[[int], None] | None = None) -> str:
         """Download update file and report progress. Returns path to file."""
         tmp_dir = Path(tempfile.mkdtemp(prefix="update_"))
-        target_path = tmp_dir / "update_package.zip"
+        # Определяем расширение из URL
+        ext = ".zip" if url.endswith(".zip") else ".exe"
+        target_path = tmp_dir / f"update_package{ext}"
 
         try:
             req = request.Request(url, headers={"User-Agent": "AutoWord-Updater"})
@@ -155,11 +153,7 @@ class UpdateService:
             raise
 
     def apply_update(self, update_path: str) -> bool:
-        """Apply update from a downloaded zip archive.
-
-        The ZIP is expected to have files at the top level (no nested directory).
-        This is ensured by the CI workflow (release.yml).
-        """
+        """Apply update from a downloaded zip archive."""
         try:
             with ZipFile(update_path, "r") as zf:
                 zf.extractall(self.app_dir)
@@ -171,12 +165,8 @@ class UpdateService:
         """
         Create a batch script for Windows that will:
         1. Wait for the app to close
-        2. Backup critical files
-        3. Extract the update ZIP directly into app_dir
-        4. Restart the app
-
-        The ZIP must contain files at the top level (DocumentGenerator.exe,
-        _internal/, etc.) — no nested subdirectory.
+        2. Extract the update
+        3. Restart the app
 
         Returns path to the script, or None on non-Windows.
         """
@@ -192,10 +182,8 @@ class UpdateService:
             exe_name = Path(sys.executable).name
 
         exe_path = self.app_dir / exe_name
-        backup_path = self.app_dir / f"{exe_name}.bak"
 
-        # Скрипт извлекает ZIP напрямую в папку программы (перезаписывая файлы).
-        # Это совместимо со старыми версиями updater-а.
+        # Создаём batch скрипт
         script_content = f'''@echo off
 chcp 65001 >nul
 echo ========================================
@@ -212,24 +200,15 @@ if "%ERRORLEVEL%"=="0" (
 )
 
 echo Программа закрыта. Устанавливаем обновление...
-timeout /t 2 /nobreak >nul
+timeout /t 1 /nobreak >nul
 
-:: Бэкап текущего exe
-echo Создание бэкапа...
-if exist "{backup_path}" del /f /q "{backup_path}"
-copy /y "{exe_path}" "{backup_path}" >nul 2>nul
-
-:: Извлечение ZIP прямо в папку программы (перезапись)
 echo Распаковка файлов...
 powershell -Command "Expand-Archive -Path '{archive_path}' -DestinationPath '{self.app_dir}' -Force"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ОШИБКА: Не удалось распаковать обновление!
-    echo Восстанавливаем бэкап...
-    if exist "{backup_path}" (
-        copy /y "{backup_path}" "{exe_path}" >nul
-    )
+    echo Попробуйте распаковать вручную.
     pause
     exit /b 1
 )
@@ -245,7 +224,6 @@ timeout /t 2 /nobreak >nul
 start "" "{exe_path}"
 
 :: Удаляем временные файлы
-del "{backup_path}" 2>nul
 del "{archive_path}" 2>nul
 del "%~f0" 2>nul
 '''
