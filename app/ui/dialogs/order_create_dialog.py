@@ -98,6 +98,24 @@ class OrderCreateDialog(QDialog):
         self.combo_education_form.addItem("очно-заочная", "очно-заочная")
         details_layout.addRow("Форма обучения:", self.combo_education_form)
 
+        # Education format
+        self.combo_education_format = QComboBox()
+        self.combo_education_format.setEditable(True)
+        self.combo_education_format.addItem("", "")
+        self.combo_education_format.addItem(
+            "с применением электронного обучения",
+            "с применением электронного обучения"
+        )
+        self.combo_education_format.addItem(
+            "с применением дистанционных образовательных технологий",
+            "с применением дистанционных образовательных технологий"
+        )
+        self.combo_education_format.addItem(
+            "с применением электронного обучения и дистанционных образовательных технологий",
+            "с применением электронного обучения и дистанционных образовательных технологий"
+        )
+        details_layout.addRow("Формат обучения:", self.combo_education_format)
+
         # Executor position
         self.combo_executor_position = QComboBox()
         self.combo_executor_position.setEditable(True)
@@ -268,6 +286,7 @@ class OrderCreateDialog(QDialog):
                         'program_name': p.program_name,
                         'program_short_name': p.program_short_name,
                         'training_period': p.training_period,
+                        'training_duration': p.training_duration,
                         'program_volume': p.program_volume,
                         'education_form': p.education_form,
                         'education_format': p.education_format,
@@ -276,7 +295,7 @@ class OrderCreateDialog(QDialog):
             QMessageBox.critical(self, "Ошибка", f"Ошибка загрузки программ: {e}")
 
     def _on_program_changed(self):
-        """Load listeners for selected program."""
+        """Load listeners for selected program and auto-fill fields from program data."""
         self.list_listeners.clear()
         self._program_listeners.clear()
 
@@ -284,6 +303,9 @@ class OrderCreateDialog(QDialog):
         if not prog_id:
             self._update_count()
             return
+
+        # Auto-fill fields from program data
+        self._fill_fields_from_program(prog_id)
 
         try:
             with DatabaseSession() as session:
@@ -322,6 +344,72 @@ class OrderCreateDialog(QDialog):
             QMessageBox.critical(self, "Ошибка", f"Ошибка загрузки слушателей: {e}")
 
         self._update_count()
+
+    def _fill_fields_from_program(self, prog_id: int):
+        """Auto-fill form fields from the selected program's data."""
+        import re
+
+        program_data = None
+        for p in self._all_programs:
+            if p['id'] == prog_id:
+                program_data = p
+                break
+        if not program_data:
+            return
+
+        # 1) Форма обучения
+        edu_form = (program_data.get('education_form') or '').strip()
+        if edu_form:
+            idx = self.combo_education_form.findData(edu_form)
+            if idx >= 0:
+                self.combo_education_form.setCurrentIndex(idx)
+
+        # 2) Формат обучения
+        edu_format = (program_data.get('education_format') or '').strip()
+        if edu_format:
+            idx = self.combo_education_format.findData(edu_format)
+            if idx >= 0:
+                self.combo_education_format.setCurrentIndex(idx)
+            else:
+                self.combo_education_format.setEditText(edu_format)
+
+        # 3) Количество часов из объёма программы (парсим число)
+        volume = (program_data.get('program_volume') or '').strip()
+        if volume:
+            match = re.search(r'(\d+)', volume)
+            if match:
+                hours = int(match.group(1))
+                self.spin_hours.setValue(hours)
+
+        # 4) Период обучения → даты начала и окончания
+        period = (program_data.get('training_period') or '').strip()
+        if period:
+            self._parse_training_period(period)
+
+    def _parse_training_period(self, period: str):
+        """Try to parse training period string into start/end dates."""
+        import re
+        from datetime import datetime as _dt
+
+        # Try patterns: "dd.mm.yyyy - dd.mm.yyyy", "dd.mm.yyyy по dd.mm.yyyy",
+        #               "с dd.mm.yyyy по dd.mm.yyyy"
+        pattern = r'(\d{2}[./]\d{2}[./]\d{4})\s*[-–—]\s*(\d{2}[./]\d{2}[./]\d{4})'
+        match = re.search(pattern, period)
+        if not match:
+            pattern = r'с?\s*(\d{2}[./]\d{2}[./]\d{4})\s*(?:по|до)\s*(\d{2}[./]\d{2}[./]\d{4})'
+            match = re.search(pattern, period)
+
+        if match:
+            date_str1, date_str2 = match.group(1), match.group(2)
+            for fmt in ('%d.%m.%Y', '%d/%m/%Y'):
+                try:
+                    d1 = _dt.strptime(date_str1.replace('/', '.'), '%d.%m.%Y').date()
+                    d2 = _dt.strptime(date_str2.replace('/', '.'), '%d.%m.%Y').date()
+                    self.edit_start_date.setDate(QDate(d1.year, d1.month, d1.day))
+                    self.edit_end_date.setDate(QDate(d2.year, d2.month, d2.day))
+                    return
+                except ValueError:
+                    continue
 
     def _load_templates(self):
         """Load available .docx templates into combobox."""
@@ -440,10 +528,20 @@ class OrderCreateDialog(QDialog):
 
         # Collect extra context from new fields
         education_form = self.combo_education_form.currentData() or ''
+        education_format = self.combo_education_format.currentText().strip()
         program_type = self.combo_program_type.currentData() or ''
         executor_position = self.combo_executor_position.currentText().strip()
         executor_name = self.edit_executor.text().strip()
         executor_full = f"{executor_position} {executor_name}".strip() if executor_position else executor_name
+
+        # Get training_period directly from program data
+        training_period = ''
+        training_duration = ''
+        for p in self._all_programs:
+            if p['id'] == prog_id:
+                training_period = p.get('training_period') or ''
+                training_duration = p.get('training_duration') or ''
+                break
 
         try:
             file_path = self.generator.generate_order(
@@ -456,6 +554,7 @@ class OrderCreateDialog(QDialog):
                 end_date=end_datetime,
                 hours=self.spin_hours.value(),
                 education_form=education_form,
+                education_format=education_format,
                 template_name=selected_template,
                 custom_context={
                     'order_type_label': order_type_label,
@@ -464,6 +563,8 @@ class OrderCreateDialog(QDialog):
                     'executor_position': executor_position,
                     'executor_name': executor_name,
                     'executor_full': executor_full,
+                    'training_period': training_period,
+                    'training_duration': training_duration,
                 },
             )
 

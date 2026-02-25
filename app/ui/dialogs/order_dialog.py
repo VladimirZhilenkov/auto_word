@@ -221,6 +221,10 @@ class OrderGenerateDialog(QDialog):
                 
                 self._populate_listeners_list()
                 
+                # Auto-fill fields from selected program
+                if self.selected_program:
+                    self._fill_from_program(session)
+                
         except Exception as e:
             QMessageBox.critical(
                 self, "Ошибка",
@@ -230,6 +234,52 @@ class OrderGenerateDialog(QDialog):
         # Pre-fetch next order number
         self._update_next_number()
     
+    def _fill_from_program(self, session):
+        """Auto-fill form fields from the selected program."""
+        import re
+
+        prog = self.selected_program
+        # Re-fetch to ensure we have latest data (detached instance safety)
+        prog = session.query(Program).get(prog.id) if prog else None
+        if not prog:
+            return
+
+        # Program name
+        name = prog.program_short_name or prog.program_name or ''
+        if name:
+            self.edit_program_name.setText(name)
+
+        # Hours from program_volume (e.g. "72 часа" → 72)
+        volume = (prog.program_volume or '').strip()
+        if volume:
+            match = re.search(r'(\d+)', volume)
+            if match:
+                self.spin_hours.setValue(int(match.group(1)))
+
+        # Parse training period into start/end dates
+        period = (prog.training_period or '').strip()
+        if period:
+            self._parse_and_set_period(period)
+
+    def _parse_and_set_period(self, period: str):
+        """Parse training period string into start/end date fields."""
+        import re
+        from datetime import datetime as _dt
+
+        pattern = r'(\d{2}[./]\d{2}[./]\d{4})\s*[-–—]\s*(\d{2}[./]\d{2}[./]\d{4})'
+        match = re.search(pattern, period)
+        if not match:
+            pattern = r'с?\s*(\d{2}[./]\d{2}[./]\d{4})\s*(?:по|до)\s*(\d{2}[./]\d{2}[./]\d{4})'
+            match = re.search(pattern, period)
+        if match:
+            try:
+                d1 = _dt.strptime(match.group(1).replace('/', '.'), '%d.%m.%Y').date()
+                d2 = _dt.strptime(match.group(2).replace('/', '.'), '%d.%m.%Y').date()
+                self.edit_start_date.setDate(d1)
+                self.edit_end_date.setDate(d2)
+            except ValueError:
+                pass
+
     def _update_next_number(self):
         """Fetch and display next order number for selected type."""
         order_type = self.combo_order_type.currentData()
