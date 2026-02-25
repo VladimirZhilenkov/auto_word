@@ -87,7 +87,7 @@ class OrderJournalService:
             if program_id and not resolved_program_name:
                 prog = session.query(Program).get(program_id)
                 if prog:
-                    resolved_program_name = prog.program_short_name or prog.program_name
+                    resolved_program_name = prog.program_name or prog.program_short_name
 
             entry = OrderJournal(
                 journal_type=journal_type,
@@ -273,7 +273,7 @@ class OrderJournalService:
             if 'program_id' in fields and fields.get('program_id') and not fields.get('program_name'):
                 prog = session.query(Program).get(fields['program_id'])
                 if prog:
-                    fields['program_name'] = prog.program_short_name or prog.program_name
+                    fields['program_name'] = prog.program_name or prog.program_short_name
 
             for k, v in fields.items():
                 setattr(entry, k, v)

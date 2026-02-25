@@ -511,7 +511,7 @@ class OrderCreateDialog(QDialog):
         program_name = ""
         for p in self._all_programs:
             if p['id'] == prog_id:
-                program_name = p.get('program_short_name') or p.get('program_name', '')
+                program_name = p.get('program_name') or p.get('program_short_name', '')
                 break
 
         self.text_results.setVisible(True)

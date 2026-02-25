@@ -240,7 +240,7 @@ class ContractJournalService:
         listener_full_name = listener.full_name
         program_name = None
         if program:
-            program_name = program.program_short_name or program.program_name
+            program_name = program.program_name or program.program_short_name
 
         entry = ContractJournal(
             contract_number=contract_number,
@@ -292,7 +292,7 @@ class ContractJournalService:
                     listener_id=listener.id,
                     program_id=program.id if program else None,
                     listener_full_name=listener.full_name,
-                    program_name=program.program_short_name or program.program_name if program else None,
+                    program_name=program.program_name or program.program_short_name if program else None,
                     contract_sum=kwargs.get("contract_sum"),
                     payment_type=kwargs.get("payment_type"),
                     notes=kwargs.get("notes"),
@@ -391,7 +391,7 @@ class ContractJournalService:
             if "program_id" in fields:
                 program = session.query(Program).get(fields["program_id"])
                 if program:
-                    fields.setdefault("program_name", program.program_short_name or program.program_name)
+                    fields.setdefault("program_name", program.program_name or program.program_short_name)
 
             for k, v in fields.items():
                 setattr(entry, k, v)

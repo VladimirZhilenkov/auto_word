@@ -245,7 +245,7 @@ class OrderGenerateDialog(QDialog):
             return
 
         # Program name
-        name = prog.program_short_name or prog.program_name or ''
+        name = prog.program_name or prog.program_short_name or ''
         if name:
             self.edit_program_name.setText(name)
 
