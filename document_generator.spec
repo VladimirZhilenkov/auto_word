@@ -53,24 +53,34 @@ pyz = PYZ(
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='DocumentGenerator',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,          # UPX OFF — avoid antivirus false positives
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,  # Set to True for debugging
+    console=False,      # Set to True for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here: 'assets/icon.ico'
+    icon=None,           # Add icon path here: 'resources/icon.ico'
+    version='file_version_info.txt',  # Embedded version info
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,           # UPX OFF here too
+    upx_exclude=[],
+    name='DocumentGenerator',
 )
 
 # For macOS app bundle (optional)
@@ -82,8 +92,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Document Generator',
         'CFBundleDisplayName': 'Генератор документов',
-        'CFBundleVersion': '1.0.0',
-        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleVersion': '2.4.0',
+        'CFBundleShortVersionString': '2.4.0',
         'NSHighResolutionCapable': True,
     },
 )

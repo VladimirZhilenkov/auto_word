@@ -35,6 +35,9 @@ pyinstaller build_windows.spec --clean
 
 echo.
 echo === Build complete! ===
-echo Executable is in: dist\DocumentGenerator.exe
+echo Output folder: dist\DocumentGenerator\
+echo Executable:    dist\DocumentGenerator\DocumentGenerator.exe
+echo.
+echo NOTE: Copy the entire dist\DocumentGenerator\ folder to distribute.
 echo.
 pause

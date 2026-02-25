@@ -12,7 +12,9 @@
    build_windows.bat
    ```
 
-4. **Готовый файл:** `dist\DocumentGenerator.exe`
+4. **Готовая папка:** `dist\DocumentGenerator\` (содержит `DocumentGenerator.exe` и все зависимости)
+
+> **Примечание:** Сборка использует режим `--onedir` и отключённый UPX для минимизации ложных срабатываний антивирусов.
 
 ---
 
@@ -37,7 +39,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: DocumentGenerator
-          path: dist/DocumentGenerator.exe
+          path: dist/DocumentGenerator/
 ```
 
 3. После push в репозиторий, exe файл будет в артефактах сборки

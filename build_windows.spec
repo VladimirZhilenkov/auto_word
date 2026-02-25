@@ -1,5 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec file for Windows build
+# Build: pyinstaller build_windows.spec
+#
+# ANTI-VIRUS NOTES:
+# - UPX disabled (upx=False) to avoid false positives
+# - --onedir mode to avoid temp extraction (less suspicious)
+# - Version info embedded for legitimacy
 
 import sys
 from pathlib import Path
@@ -39,7 +45,13 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'matplotlib',
+        'numpy.testing',
+        'scipy',
+        'PIL',
+        'tkinter',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -51,22 +63,32 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='DocumentGenerator',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,          # UPX OFF — avoid antivirus false positives
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,  # No console window
+    console=False,      # No console window
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here if you have one: 'icon.ico'
+    icon=None,           # Add icon path here if you have one: 'resources/icon.ico'
+    version='file_version_info.txt',  # Embedded version info
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,           # UPX OFF here too
+    upx_exclude=[],
+    name='DocumentGenerator',
 )
