@@ -19,6 +19,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import QTimer
 
+from app import __version__ as APP_VERSION
 from app.services.update_service import UpdateService
 
 # Add the application root to Python path
@@ -82,7 +83,7 @@ def create_application():
     
     # Set application metadata
     app.setApplicationName("Генератор документов")
-    app.setApplicationVersion("2.3.2")
+    app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName("Document Generator")
     
     # Set application style
@@ -120,7 +121,7 @@ def check_updates_silently(window):
 def main():
     """Main entry point."""
     print("=" * 50)
-    print("Генератор документов v2.3.2")
+    print(f"Генератор документов v{APP_VERSION}")
     print("=" * 50)
     
     # Setup environment

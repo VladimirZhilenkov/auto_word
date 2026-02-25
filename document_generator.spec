@@ -1,13 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 PyInstaller spec file for Document Generator application.
+NOTE: This is a legacy spec file. Prefer build_windows.spec for CI/CD builds.
 Build command: pyinstaller document_generator.spec
 """
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-# Collect pymorphy2 data files
-pymorphy2_datas = collect_data_files('pymorphy2_dicts_ru')
+# Collect pymorphy3 data files (migrated from pymorphy2)
+pymorphy3_datas = collect_data_files('pymorphy3_dicts_ru')
 
 block_cipher = None
 
@@ -16,18 +17,22 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('docx_files', 'docx_files'),
-        ('data', 'data'),
-    ] + pymorphy2_datas,
+        ('templates', 'templates'),
+        ('app', 'app'),
+    ] + pymorphy3_datas,
     hiddenimports=[
-        'pymorphy2',
-        'pymorphy2_dicts_ru',
+        'pymorphy3',
+        'pymorphy3_dicts_ru',
+        'dawg_python',
         'sqlalchemy.dialects.sqlite',
         'pandas',
         'openpyxl',
         'docxtpl',
         'jinja2',
-    ] + collect_submodules('pymorphy2'),
+        'packaging',
+        'packaging.version',
+        'certifi',
+    ] + collect_submodules('pymorphy3'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -83,7 +88,7 @@ coll = COLLECT(
     name='DocumentGenerator',
 )
 
-# For macOS app bundle (optional)
+# For macOS app bundle (optional, not used in Windows CI)
 app = BUNDLE(
     exe,
     name='DocumentGenerator.app',
