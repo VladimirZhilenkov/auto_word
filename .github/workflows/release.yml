@@ -31,19 +31,40 @@ jobs:
       
       - name: List dist folder
         run: |
-          dir dist
+          echo "=== dist ===" && dir dist
+          echo "=== dist\DocumentGenerator ===" && dir dist\DocumentGenerator
         shell: cmd
       
-      - name: Rename exe for release
+      - name: Create ZIP archive
         run: |
-          Copy-Item "dist\DocumentGenerator.exe" "DocumentGenerator-${{ github.ref_name }}.exe"
+          # ВАЖНО: архивируем СОДЕРЖИМОЕ папки DocumentGenerator,
+          # чтобы внутри ZIP файлы лежали плоско (без вложенной папки).
+          # Старый update_service делает Expand-Archive прямо в app_dir.
+          Push-Location dist\DocumentGenerator
+          Compress-Archive -Path * -DestinationPath "..\..\AutoWord-${{ github.ref_name }}.zip"
+          Pop-Location
+        shell: pwsh
+      
+      - name: Verify ZIP contents
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("AutoWord-${{ github.ref_name }}.zip")
+          $names = $zip.Entries.FullName
+          Write-Host "ZIP contains $($names.Count) entries. Top-level:"
+          $names | Where-Object { $_ -notlike '*/*' -or $_ -like '*/' } | Select-Object -First 20
+          $zip.Dispose()
+          # Проверяем что exe лежит на верхнем уровне (не во вложенной папке)
+          if ($names -notcontains 'DocumentGenerator.exe') {
+            throw 'ОШИБКА: DocumentGenerator.exe не найден на верхнем уровне ZIP!'
+          }
+          Write-Host "OK: DocumentGenerator.exe найден на верхнем уровне ZIP"
         shell: pwsh
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: AutoWord-Windows
-          path: DocumentGenerator-${{ github.ref_name }}.exe
+          path: AutoWord-${{ github.ref_name }}.zip
 
   create-release:
     needs: build-windows
@@ -65,14 +86,15 @@ jobs:
             ## AutoWord ${{ github.ref_name }}
             
             ### Установка
-            1. Скачайте `DocumentGenerator-${{ github.ref_name }}.exe`
-            2. Поместите в любую папку
-            3. Запустите
+            1. Скачайте `AutoWord-${{ github.ref_name }}.zip`
+            2. Распакуйте в любую папку
+            3. Запустите `DocumentGenerator.exe`
             
             ### Обновление
-            Замените старый exe-файл новым.
+            Программа обновляется автоматически через меню «Справка → Проверить обновления».
+            Или вручную: замените файлы в папке программы содержимым архива.
           files: |
-            DocumentGenerator-${{ github.ref_name }}.exe
+            AutoWord-${{ github.ref_name }}.zip
           draft: false
           prerelease: false
         env:

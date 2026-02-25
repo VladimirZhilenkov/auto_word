@@ -1,12 +1,16 @@
 """
 Update service for checking, downloading, and applying application updates.
 Uses GitHub Releases API for version checking.
-Designed for single-file (onefile) PyInstaller builds.
+
+IMPORTANT: The release ZIP must contain files at the TOP level (no nested folder).
+This is critical because the old deployed versions use Expand-Archive directly
+into app_dir. If the ZIP has a subdirectory, the extraction breaks the app.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import ssl
 import sys
 import tempfile
@@ -14,6 +18,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 from urllib import request
 from urllib.error import URLError, HTTPError
+from zipfile import ZipFile
 
 from packaging import version
 
@@ -107,13 +112,7 @@ class UpdateService:
         }
 
     def _find_asset_url(self, assets: list) -> Optional[str]:
-        """Find download URL for the exe asset (onefile build)."""
-        # Приоритет: .exe файл (onefile build)
-        for asset in assets:
-            name = asset.get("name", "")
-            if name.endswith(".exe"):
-                return asset.get("browser_download_url")
-        # Fallback: .zip файл
+        """Find download URL for the ZIP asset."""
         for asset in assets:
             name = asset.get("name", "")
             if name.endswith(".zip"):
@@ -121,11 +120,9 @@ class UpdateService:
         return None
 
     def download_update(self, url: str, progress_callback: Callable[[int], None] | None = None) -> str:
-        """Download update file and report progress. Returns path to downloaded file."""
+        """Download update file and report progress. Returns path to file."""
         tmp_dir = Path(tempfile.mkdtemp(prefix="update_"))
-        # Сохраняем оригинальное имя файла из URL
-        filename = url.rsplit("/", 1)[-1] if "/" in url else "update.exe"
-        target_path = tmp_dir / filename
+        target_path = tmp_dir / "update_package.zip"
 
         try:
             req = request.Request(url, headers={"User-Agent": "AutoWord-Updater"})
@@ -148,22 +145,37 @@ class UpdateService:
                 target_path.unlink()
             raise
 
-    def create_update_script(self, downloaded_path: str) -> Optional[str]:
+    def apply_update(self, update_path: str) -> bool:
+        """Apply update from a downloaded zip archive.
+
+        The ZIP is expected to have files at the top level (no nested directory).
+        This is ensured by the CI workflow (release.yml).
+        """
+        try:
+            with ZipFile(update_path, "r") as zf:
+                zf.extractall(self.app_dir)
+            return True
+        except Exception:
+            return False
+
+    def create_update_script(self, archive_path: str) -> Optional[str]:
         """
         Create a batch script for Windows that will:
         1. Wait for the app to close
-        2. Backup old exe
-        3. Replace with new exe
+        2. Backup critical files
+        3. Extract the update ZIP directly into app_dir
         4. Restart the app
 
-        For onefile builds this is trivial — just replace one .exe file.
+        The ZIP must contain files at the top level (DocumentGenerator.exe,
+        _internal/, etc.) — no nested subdirectory.
+
         Returns path to the script, or None on non-Windows.
         """
         if sys.platform != 'win32':
             return None
 
-        downloaded_path = Path(downloaded_path)
-        script_path = downloaded_path.parent / "update.bat"
+        archive_path = Path(archive_path)
+        script_path = archive_path.parent / "update.bat"
 
         # Получаем имя exe файла
         exe_name = "DocumentGenerator.exe"
@@ -173,6 +185,8 @@ class UpdateService:
         exe_path = self.app_dir / exe_name
         backup_path = self.app_dir / f"{exe_name}.bak"
 
+        # Скрипт извлекает ZIP напрямую в папку программы (перезаписывая файлы).
+        # Это совместимо со старыми версиями updater-а.
         script_content = f'''@echo off
 chcp 65001 >nul
 echo ========================================
@@ -196,14 +210,17 @@ echo Создание бэкапа...
 if exist "{backup_path}" del /f /q "{backup_path}"
 copy /y "{exe_path}" "{backup_path}" >nul 2>nul
 
-:: Замена exe файла
-echo Обновление файла...
-copy /y "{downloaded_path}" "{exe_path}" >nul
+:: Извлечение ZIP прямо в папку программы (перезапись)
+echo Распаковка файлов...
+powershell -Command "Expand-Archive -Path '{archive_path}' -DestinationPath '{self.app_dir}' -Force"
+
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo ОШИБКА: Не удалось заменить файл!
+    echo ОШИБКА: Не удалось распаковать обновление!
     echo Восстанавливаем бэкап...
-    copy /y "{backup_path}" "{exe_path}" >nul
+    if exist "{backup_path}" (
+        copy /y "{backup_path}" "{exe_path}" >nul
+    )
     pause
     exit /b 1
 )
@@ -219,8 +236,8 @@ timeout /t 2 /nobreak >nul
 start "" "{exe_path}"
 
 :: Удаляем временные файлы
-del "{downloaded_path}" 2>nul
 del "{backup_path}" 2>nul
+del "{archive_path}" 2>nul
 del "%~f0" 2>nul
 '''
 

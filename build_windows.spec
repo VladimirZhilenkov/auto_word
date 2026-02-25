@@ -4,7 +4,7 @@
 #
 # ANTI-VIRUS NOTES:
 # - UPX disabled (upx=False) to avoid false positives
-# - --onefile mode: single executable
+# - --onedir mode to avoid temp extraction (less suspicious)
 # - Version info embedded for legitimacy
 
 import sys
@@ -67,10 +67,8 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='DocumentGenerator',
     debug=False,
     bootloader_ignore_signals=False,
@@ -86,4 +84,15 @@ exe = EXE(
     entitlements_file=None,
     icon=None,           # Add icon path here if you have one: 'resources/icon.ico'
     version='file_version_info.txt',  # Embedded version info
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,           # UPX OFF here too
+    upx_exclude=[],
+    name='DocumentGenerator',
 )
