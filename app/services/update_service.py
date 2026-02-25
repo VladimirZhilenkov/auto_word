@@ -154,13 +154,51 @@ class UpdateService:
             raise
 
     def apply_update(self, update_path: str) -> bool:
-        """Apply update from a downloaded zip archive."""
+        """Apply update from a downloaded zip archive.
+        
+        Handles ZIP archives that may contain a nested subdirectory
+        (e.g., DocumentGenerator/) by detecting common prefix and
+        extracting contents to the correct level.
+        """
         try:
             with ZipFile(update_path, "r") as zf:
-                zf.extractall(self.app_dir)
+                names = zf.namelist()
+                # Detect common prefix directory (e.g. "DocumentGenerator/")
+                prefix = self._detect_zip_prefix(names)
+                
+                if prefix:
+                    # Extract with prefix stripped to a temp dir, then copy
+                    tmp_extract = Path(tempfile.mkdtemp(prefix="update_extract_"))
+                    zf.extractall(tmp_extract)
+                    src = tmp_extract / prefix.rstrip("/")
+                    for item in src.rglob("*"):
+                        relative = item.relative_to(src)
+                        dest = self.app_dir / relative
+                        if item.is_dir():
+                            dest.mkdir(parents=True, exist_ok=True)
+                        else:
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(str(item), str(dest))
+                    shutil.rmtree(tmp_extract, ignore_errors=True)
+                else:
+                    zf.extractall(self.app_dir)
             return True
         except Exception:
             return False
+
+    @staticmethod
+    def _detect_zip_prefix(names: list) -> Optional[str]:
+        """Check if all ZIP entries share a common top-level directory prefix."""
+        if not names:
+            return None
+        # Filter out empty names and directory-only entries at root level
+        parts = [n.split("/", 1) for n in names if "/" in n]
+        if not parts:
+            return None
+        first_dir = parts[0][0]
+        if all(p[0] == first_dir for p in parts):
+            return first_dir + "/"
+        return None
 
     def create_update_script(self, archive_path: str) -> Optional[str]:
         """
@@ -183,6 +221,8 @@ class UpdateService:
             exe_name = Path(sys.executable).name
         
         exe_path = self.app_dir / exe_name
+        backup_dir = self.app_dir / "_backup_before_update"
+        tmp_extract = archive_path.parent / "_extract_tmp"
         
         # Создаём batch скрипт
         script_content = f'''@echo off
@@ -203,13 +243,39 @@ if "%ERRORLEVEL%"=="0" (
 echo Программа закрыта. Устанавливаем обновление...
 timeout /t 1 /nobreak >nul
 
+:: Создаём бэкап перед обновлением
+echo Создание бэкапа текущей версии...
+if exist "{backup_dir}" rmdir /s /q "{backup_dir}"
+mkdir "{backup_dir}" 2>nul
+xcopy "{self.app_dir}\\*.exe" "{backup_dir}\\" /Y /Q >nul 2>nul
+xcopy "{self.app_dir}\\*.dll" "{backup_dir}\\" /Y /Q >nul 2>nul
+
 echo Распаковка файлов...
-powershell -Command "Expand-Archive -Path '{archive_path}' -DestinationPath '{self.app_dir}' -Force"
+:: Извлекаем во временную папку
+if exist "{tmp_extract}" rmdir /s /q "{tmp_extract}"
+powershell -Command "Expand-Archive -Path '{archive_path}' -DestinationPath '{tmp_extract}' -Force"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ОШИБКА: Не удалось распаковать обновление!
     echo Попробуйте распаковать вручную.
+    pause
+    exit /b 1
+)
+
+:: Определяем, есть ли вложенная папка (например DocumentGenerator)
+:: Если в архиве одна директория — копируем её содержимое
+set "SRC={tmp_extract}"
+for /f "delims=" %%D in ('dir /b /ad "{tmp_extract}" 2^>nul') do (
+    :: Проверяем, единственная ли это подпапка
+    set "SRC={tmp_extract}\\%%D"
+)
+
+echo Копирование файлов обновления...
+xcopy "%SRC%\\*" "{self.app_dir}\\" /E /Y /Q >nul
+if %ERRORLEVEL% NEQ 0 (
+    echo ОШИБКА копирования! Восстанавливаем бэкап...
+    xcopy "{backup_dir}\\*" "{self.app_dir}\\" /E /Y /Q >nul
     pause
     exit /b 1
 )
@@ -225,6 +291,8 @@ timeout /t 2 /nobreak >nul
 start "" "{exe_path}"
 
 :: Удаляем временные файлы
+rmdir /s /q "{tmp_extract}" 2>nul
+rmdir /s /q "{backup_dir}" 2>nul
 del "{archive_path}" 2>nul
 del "%~f0" 2>nul
 '''

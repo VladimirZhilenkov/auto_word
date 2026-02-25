@@ -20,6 +20,7 @@ from .dialogs.order_dialog import OrderGenerateDialog
 from .dialogs.backup_dialog import BackupDialog
 from .dialogs.database_config_dialog import DatabaseConfigDialog
 from .dialogs.update_dialog import UpdateDialog
+from .. import __version__
 
 
 class MainWindow(QMainWindow):
@@ -28,7 +29,7 @@ class MainWindow(QMainWindow):
     """
     
     APP_TITLE = "Генератор документов"
-    APP_VERSION = "2.4.0"
+    APP_VERSION = __version__
     
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)

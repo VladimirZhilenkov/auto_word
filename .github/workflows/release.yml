@@ -36,7 +36,7 @@ jobs:
       
       - name: Create ZIP archive
         run: |
-          Compress-Archive -Path dist\* -DestinationPath AutoWord-${{ github.ref_name }}.zip
+          Compress-Archive -Path dist\DocumentGenerator\* -DestinationPath AutoWord-${{ github.ref_name }}.zip
         shell: pwsh
       
       - name: Upload artifact
