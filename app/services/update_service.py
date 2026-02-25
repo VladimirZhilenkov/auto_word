@@ -1,12 +1,12 @@
 """
 Update service for checking, downloading, and applying application updates.
 Uses GitHub Releases API for version checking.
+Designed for single-file (onefile) PyInstaller builds.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 import ssl
 import sys
 import tempfile
@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 from urllib import request
 from urllib.error import URLError, HTTPError
-from zipfile import ZipFile
 
 from packaging import version
 
@@ -26,14 +25,14 @@ def _get_ssl_context():
         return ssl.create_default_context(cafile=certifi.where())
     except ImportError:
         pass
-    
+
     # Пробуем системный контекст
     try:
         ctx = ssl.create_default_context()
         return ctx
     except Exception:
         pass
-    
+
     # Fallback: отключаем проверку (не идеально, но работает)
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -43,13 +42,10 @@ def _get_ssl_context():
 
 class UpdateService:
     """Update service using GitHub Releases."""
-    
+
     GITHUB_REPO = "VladimirZhilenkov/auto_word"
     GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-    
-    # Имя файла для скачивания (должно совпадать с asset в Release)
-    ASSET_NAME = "AutoWord.zip"
-    
+
     # Таймаут для запросов (секунды)
     TIMEOUT = 10
 
@@ -80,7 +76,6 @@ class UpdateService:
                 return {"available": False, "error": "Релизы не найдены на GitHub"}
             return {"available": False, "error": f"Ошибка сервера: {exc.code}"}
         except URLError as exc:
-            # Дружественные сообщения для разных типов сетевых ошибок
             reason = str(exc.reason)
             if "10061" in reason or "Connection refused" in reason:
                 return {"available": False, "error": "Нет подключения к интернету или GitHub недоступен"}
@@ -92,14 +87,9 @@ class UpdateService:
         except Exception as exc:
             return {"available": False, "error": f"Не удалось проверить обновления: {exc}"}
 
-        # Получаем версию из tag_name (например "v2.1.0" -> "2.1.0")
         tag = data.get("tag_name", "")
         remote_version = tag.lstrip("v") if tag else "0.0.0"
-        
-        # Changelog из body релиза
         changelog = data.get("body") or ""
-        
-        # Ищем нужный asset для скачивания
         download_url = self._find_asset_url(data.get("assets", []))
 
         try:
@@ -117,20 +107,25 @@ class UpdateService:
         }
 
     def _find_asset_url(self, assets: list) -> Optional[str]:
-        """Find download URL for the target asset."""
+        """Find download URL for the exe asset (onefile build)."""
+        # Приоритет: .exe файл (onefile build)
         for asset in assets:
             name = asset.get("name", "")
-            # Ищем ZIP или EXE файл
-            if name == self.ASSET_NAME or name.endswith(".zip") or name.endswith(".exe"):
+            if name.endswith(".exe"):
+                return asset.get("browser_download_url")
+        # Fallback: .zip файл
+        for asset in assets:
+            name = asset.get("name", "")
+            if name.endswith(".zip"):
                 return asset.get("browser_download_url")
         return None
 
     def download_update(self, url: str, progress_callback: Callable[[int], None] | None = None) -> str:
-        """Download update file and report progress. Returns path to file."""
+        """Download update file and report progress. Returns path to downloaded file."""
         tmp_dir = Path(tempfile.mkdtemp(prefix="update_"))
-        # Определяем расширение из URL
-        ext = ".zip" if url.endswith(".zip") else ".exe"
-        target_path = tmp_dir / f"update_package{ext}"
+        # Сохраняем оригинальное имя файла из URL
+        filename = url.rsplit("/", 1)[-1] if "/" in url else "update.exe"
+        target_path = tmp_dir / filename
 
         try:
             req = request.Request(url, headers={"User-Agent": "AutoWord-Updater"})
@@ -153,78 +148,31 @@ class UpdateService:
                 target_path.unlink()
             raise
 
-    def apply_update(self, update_path: str) -> bool:
-        """Apply update from a downloaded zip archive.
-        
-        Handles ZIP archives that may contain a nested subdirectory
-        (e.g., DocumentGenerator/) by detecting common prefix and
-        extracting contents to the correct level.
-        """
-        try:
-            with ZipFile(update_path, "r") as zf:
-                names = zf.namelist()
-                # Detect common prefix directory (e.g. "DocumentGenerator/")
-                prefix = self._detect_zip_prefix(names)
-                
-                if prefix:
-                    # Extract with prefix stripped to a temp dir, then copy
-                    tmp_extract = Path(tempfile.mkdtemp(prefix="update_extract_"))
-                    zf.extractall(tmp_extract)
-                    src = tmp_extract / prefix.rstrip("/")
-                    for item in src.rglob("*"):
-                        relative = item.relative_to(src)
-                        dest = self.app_dir / relative
-                        if item.is_dir():
-                            dest.mkdir(parents=True, exist_ok=True)
-                        else:
-                            dest.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(str(item), str(dest))
-                    shutil.rmtree(tmp_extract, ignore_errors=True)
-                else:
-                    zf.extractall(self.app_dir)
-            return True
-        except Exception:
-            return False
-
-    @staticmethod
-    def _detect_zip_prefix(names: list) -> Optional[str]:
-        """Check if all ZIP entries share a common top-level directory prefix."""
-        if not names:
-            return None
-        # Filter out empty names and directory-only entries at root level
-        parts = [n.split("/", 1) for n in names if "/" in n]
-        if not parts:
-            return None
-        first_dir = parts[0][0]
-        if all(p[0] == first_dir for p in parts):
-            return first_dir + "/"
-        return None
-
-    def create_update_script(self, archive_path: str) -> Optional[str]:
+    def create_update_script(self, downloaded_path: str) -> Optional[str]:
         """
         Create a batch script for Windows that will:
         1. Wait for the app to close
-        2. Extract the update
-        3. Restart the app
-        
+        2. Backup old exe
+        3. Replace with new exe
+        4. Restart the app
+
+        For onefile builds this is trivial — just replace one .exe file.
         Returns path to the script, or None on non-Windows.
         """
         if sys.platform != 'win32':
             return None
-        
-        archive_path = Path(archive_path)
-        script_path = archive_path.parent / "update.bat"
-        
+
+        downloaded_path = Path(downloaded_path)
+        script_path = downloaded_path.parent / "update.bat"
+
         # Получаем имя exe файла
         exe_name = "DocumentGenerator.exe"
         if getattr(sys, "frozen", False):
             exe_name = Path(sys.executable).name
-        
+
         exe_path = self.app_dir / exe_name
-        backup_dir = self.app_dir / "_backup_before_update"
-        tmp_extract = archive_path.parent / "_extract_tmp"
-        
-        # Создаём batch скрипт
+        backup_path = self.app_dir / f"{exe_name}.bak"
+
         script_content = f'''@echo off
 chcp 65001 >nul
 echo ========================================
@@ -241,41 +189,21 @@ if "%ERRORLEVEL%"=="0" (
 )
 
 echo Программа закрыта. Устанавливаем обновление...
-timeout /t 1 /nobreak >nul
+timeout /t 2 /nobreak >nul
 
-:: Создаём бэкап перед обновлением
-echo Создание бэкапа текущей версии...
-if exist "{backup_dir}" rmdir /s /q "{backup_dir}"
-mkdir "{backup_dir}" 2>nul
-xcopy "{self.app_dir}\\*.exe" "{backup_dir}\\" /Y /Q >nul 2>nul
-xcopy "{self.app_dir}\\*.dll" "{backup_dir}\\" /Y /Q >nul 2>nul
+:: Бэкап текущего exe
+echo Создание бэкапа...
+if exist "{backup_path}" del /f /q "{backup_path}"
+copy /y "{exe_path}" "{backup_path}" >nul 2>nul
 
-echo Распаковка файлов...
-:: Извлекаем во временную папку
-if exist "{tmp_extract}" rmdir /s /q "{tmp_extract}"
-powershell -Command "Expand-Archive -Path '{archive_path}' -DestinationPath '{tmp_extract}' -Force"
-
+:: Замена exe файла
+echo Обновление файла...
+copy /y "{downloaded_path}" "{exe_path}" >nul
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo ОШИБКА: Не удалось распаковать обновление!
-    echo Попробуйте распаковать вручную.
-    pause
-    exit /b 1
-)
-
-:: Определяем, есть ли вложенная папка (например DocumentGenerator)
-:: Если в архиве одна директория — копируем её содержимое
-set "SRC={tmp_extract}"
-for /f "delims=" %%D in ('dir /b /ad "{tmp_extract}" 2^>nul') do (
-    :: Проверяем, единственная ли это подпапка
-    set "SRC={tmp_extract}\\%%D"
-)
-
-echo Копирование файлов обновления...
-xcopy "%SRC%\\*" "{self.app_dir}\\" /E /Y /Q >nul
-if %ERRORLEVEL% NEQ 0 (
-    echo ОШИБКА копирования! Восстанавливаем бэкап...
-    xcopy "{backup_dir}\\*" "{self.app_dir}\\" /E /Y /Q >nul
+    echo ОШИБКА: Не удалось заменить файл!
+    echo Восстанавливаем бэкап...
+    copy /y "{backup_path}" "{exe_path}" >nul
     pause
     exit /b 1
 )
@@ -291,12 +219,11 @@ timeout /t 2 /nobreak >nul
 start "" "{exe_path}"
 
 :: Удаляем временные файлы
-rmdir /s /q "{tmp_extract}" 2>nul
-rmdir /s /q "{backup_dir}" 2>nul
-del "{archive_path}" 2>nul
+del "{downloaded_path}" 2>nul
+del "{backup_path}" 2>nul
 del "%~f0" 2>nul
 '''
-        
+
         try:
             with open(script_path, 'w', encoding='utf-8') as f:
                 f.write(script_content)

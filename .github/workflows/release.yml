@@ -34,16 +34,16 @@ jobs:
           dir dist
         shell: cmd
       
-      - name: Create ZIP archive
+      - name: Rename exe for release
         run: |
-          Compress-Archive -Path dist\DocumentGenerator\* -DestinationPath AutoWord-${{ github.ref_name }}.zip
+          Copy-Item "dist\DocumentGenerator.exe" "DocumentGenerator-${{ github.ref_name }}.exe"
         shell: pwsh
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: AutoWord-Windows
-          path: AutoWord-${{ github.ref_name }}.zip
+          path: DocumentGenerator-${{ github.ref_name }}.exe
 
   create-release:
     needs: build-windows
@@ -65,14 +65,14 @@ jobs:
             ## AutoWord ${{ github.ref_name }}
             
             ### Установка
-            1. Скачайте `AutoWord-${{ github.ref_name }}.zip`
-            2. Распакуйте в любую папку
-            3. Запустите `AutoWord.exe`
+            1. Скачайте `DocumentGenerator-${{ github.ref_name }}.exe`
+            2. Поместите в любую папку
+            3. Запустите
             
             ### Обновление
-            Замените файлы в папке с программой новыми из архива.
+            Замените старый exe-файл новым.
           files: |
-            AutoWord-${{ github.ref_name }}.zip
+            DocumentGenerator-${{ github.ref_name }}.exe
           draft: false
           prerelease: false
         env:
