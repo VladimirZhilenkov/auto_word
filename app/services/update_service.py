@@ -112,10 +112,19 @@ class UpdateService:
         }
 
     def _find_asset_url(self, assets: list) -> Optional[str]:
-        """Find download URL for the ZIP asset."""
+        """Find download URL for the ZIP asset.
+        
+        For onedir builds (current default), prefer .zip archives.
+        The ZIP must have flat structure (no nested subdirectory).
+        """
         for asset in assets:
             name = asset.get("name", "")
             if name.endswith(".zip"):
+                return asset.get("browser_download_url")
+        # Fallback: .exe (onefile builds)
+        for asset in assets:
+            name = asset.get("name", "")
+            if name.endswith(".exe"):
                 return asset.get("browser_download_url")
         return None
 

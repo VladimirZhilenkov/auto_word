@@ -25,7 +25,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (onedir)
         run: |
           pyinstaller build_windows.spec
       
@@ -35,7 +35,7 @@ jobs:
           echo "=== dist\DocumentGenerator ===" && dir dist\DocumentGenerator
         shell: cmd
       
-      - name: Create ZIP archive
+      - name: Create ZIP archive (for onedir users)
         run: |
           # ВАЖНО: архивируем СОДЕРЖИМОЕ папки DocumentGenerator,
           # чтобы внутри ZIP файлы лежали плоско (без вложенной папки).
@@ -53,18 +53,36 @@ jobs:
           Write-Host "ZIP contains $($names.Count) entries. Top-level:"
           $names | Where-Object { $_ -notlike '*/*' -or $_ -like '*/' } | Select-Object -First 20
           $zip.Dispose()
-          # Проверяем что exe лежит на верхнем уровне (не во вложенной папке)
           if ($names -notcontains 'DocumentGenerator.exe') {
-            throw 'ОШИБКА: DocumentGenerator.exe не найден на верхнем уровне ZIP!'
+            throw 'DocumentGenerator.exe не найден на верхнем уровне ZIP!'
           }
-          Write-Host "OK: DocumentGenerator.exe найден на верхнем уровне ZIP"
+          Write-Host "OK: ZIP structure is correct (flat)"
         shell: pwsh
       
-      - name: Upload artifact
+      - name: Build standalone EXE (onefile, for v2.4.2 compat)
+        run: |
+          pyinstaller --onefile --noconsole --name DocumentGenerator `
+            --add-data "templates;templates" `
+            --add-data "app;app" `
+            --hidden-import packaging `
+            --hidden-import packaging.version `
+            --hidden-import certifi `
+            --hidden-import sqlalchemy.dialects.sqlite `
+            --hidden-import pymorphy3 `
+            --hidden-import pymorphy3_dicts_ru `
+            --hidden-import dawg_python `
+            --distpath dist_onefile `
+            main.py
+          Copy-Item "dist_onefile\DocumentGenerator.exe" "DocumentGenerator-${{ github.ref_name }}.exe"
+        shell: pwsh
+      
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AutoWord-Windows
-          path: AutoWord-${{ github.ref_name }}.zip
+          path: |
+            AutoWord-${{ github.ref_name }}.zip
+            DocumentGenerator-${{ github.ref_name }}.exe
 
   create-release:
     needs: build-windows
@@ -85,16 +103,20 @@ jobs:
           body: |
             ## AutoWord ${{ github.ref_name }}
             
+            ### Скачать
+            - **`AutoWord-${{ github.ref_name }}.zip`** — стандартный вариант (папка с программой)
+            - **`DocumentGenerator-${{ github.ref_name }}.exe`** — один файл (портативный вариант)
+            
             ### Установка
-            1. Скачайте `AutoWord-${{ github.ref_name }}.zip`
-            2. Распакуйте в любую папку
+            1. Скачайте ZIP или EXE
+            2. Распакуйте в любую папку (или поместите exe)
             3. Запустите `DocumentGenerator.exe`
             
             ### Обновление
             Программа обновляется автоматически через меню «Справка → Проверить обновления».
-            Или вручную: замените файлы в папке программы содержимым архива.
           files: |
             AutoWord-${{ github.ref_name }}.zip
+            DocumentGenerator-${{ github.ref_name }}.exe
           draft: false
           prerelease: false
         env:
