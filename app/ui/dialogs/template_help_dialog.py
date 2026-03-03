@@ -145,20 +145,23 @@ class TemplateHelpDialog(QDialog):
         </style>
         
         <h2>📋 Справочник переменных</h2>
+        <p style="color: #666; font-size: 12px;">Все переменные вводятся в двойных фигурных скобках: <code>{{ переменная }}</code></p>
         
         <h3>📅 Данные приказа</h3>
         <table>
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
             <tr><td><code>{{ order_number }}</code></td><td>Номер приказа</td><td>111</td></tr>
             <tr><td><code>{{ order_day }}</code></td><td>День приказа</td><td>12</td></tr>
-            <tr><td><code>{{ order_month }}</code></td><td>Месяц (текстом)</td><td>ноября</td></tr>
-            <tr><td><code>{{ order_year }}</code></td><td>Год</td><td>2025</td></tr>
+            <tr><td><code>{{ order_month }}</code></td><td>Месяц (текстом, родительный падеж)</td><td>ноября</td></tr>
+            <tr><td><code>{{ order_year }}</code></td><td>Год приказа</td><td>2025</td></tr>
+            <tr><td><code>{{ order_date }}</code></td><td>Полная дата приказа</td><td>12 ноября 2025 г.</td></tr>
+            <tr><td><code>{{ order_type_label }}</code></td><td>Тип приказа (текст)</td><td>О зачислении / Об отчислении</td></tr>
         </table>
         
-        <h3>📜 Данные договора/контракта</h3>
+        <h3>📜 Данные договора / контракта</h3>
         <table>
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
-            <tr><td><code>{{ contract_type }}</code></td><td>Тип договора</td><td>государственным контрактом на оказание услуг по повышению квалификации</td></tr>
+            <tr><td><code>{{ contract_type }}</code></td><td>Тип договора (полная формулировка)</td><td>государственным контрактом на оказание услуг по повышению квалификации</td></tr>
             <tr><td><code>{{ contract_number }}</code></td><td>Номер договора</td><td>б/н или № 123</td></tr>
             <tr><td><code>{{ contract_date }}</code></td><td>Дата договора</td><td>от 28 мая 2025 года</td></tr>
         </table>
@@ -168,14 +171,19 @@ class TemplateHelpDialog(QDialog):
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
             <tr><td><code>{{ stream_name }}</code></td><td>Название потока</td><td>государственных гражданских служащих</td></tr>
             <tr><td><code>{{ program_name }}</code></td><td>Название программы</td><td>Организация работы администраторов районных судов</td></tr>
+            <tr><td><code>{{ program_type }}</code></td><td>Тип программы</td><td>повышение квалификации / профессиональная переподготовка</td></tr>
             <tr><td><code>{{ hours }}</code></td><td>Количество часов</td><td>16</td></tr>
-            <tr><td><code>{{ education_form }}</code></td><td>Форма обучения</td><td>очной / заочной</td></tr>
+            <tr><td><code>{{ training_period }}</code></td><td>Период обучения (текст)</td><td>с 20 января по 25 января 2026 г.</td></tr>
+            <tr><td><code>{{ training_duration }}</code></td><td>Продолжительность обучения</td><td>5 дней</td></tr>
+            <tr><td><code>{{ education_form }}</code></td><td>Форма обучения (именительный)</td><td>очная / заочная / очно-заочная</td></tr>
+            <tr><td><code>{{ education_form_genitive }}</code></td><td>Форма обучения (родительный)</td><td>очной / заочной / очно-заочной</td></tr>
             <tr><td><code>{{ education_format }}</code></td><td>Формат обучения</td><td>с применением электронного обучения, дистанционных образовательных технологий</td></tr>
-            <tr><td><code>{{ start_date }}</code></td><td>Дата начала</td><td>20 января 2026 г.</td></tr>
-            <tr><td><code>{{ end_date }}</code></td><td>Дата окончания</td><td>25 января 2026 г.</td></tr>
+            <tr><td><code>{{ start_date }}</code></td><td>Дата начала обучения</td><td>20 января 2026 г.</td></tr>
+            <tr><td><code>{{ end_date }}</code></td><td>Дата окончания обучения</td><td>25 января 2026 г.</td></tr>
         </table>
         
         <h3>👥 Данные слушателя (в таблице со списком)</h3>
+        <p style="color: #666; font-size: 12px;">Используются внутри цикла (<code>{% for listener in listeners %}</code>)</p>
         <table>
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
             <tr><td><code>{{ loop.index }}</code></td><td>Порядковый номер</td><td>1, 2, 3...</td></tr>
@@ -183,21 +191,31 @@ class TemplateHelpDialog(QDialog):
             <tr><td><code>{{ listener.position }}</code></td><td>Должность</td><td>Администратор суда</td></tr>
             <tr><td><code>{{ listener.court_name }}</code></td><td>Наименование суда</td><td>Ленинский районный суд г. Иркутска</td></tr>
             <tr><td><code>{{ listener.region }}</code></td><td>Субъект РФ</td><td>Иркутская область</td></tr>
+            <tr><td><code>{{ listener.order_number }}</code></td><td>Номер приказа слушателя</td><td>111</td></tr>
+            <tr><td><code>{{ listener.contract_number }}</code></td><td>Номер договора слушателя</td><td>б/н</td></tr>
+            <tr><td><code>{{ listener.contract_date }}</code></td><td>Дата договора слушателя</td><td>от 28 мая 2025 года</td></tr>
         </table>
         
         <h3>👤 Данные слушателя (для индивидуальных документов)</h3>
         <table>
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
             <tr><td><code>{{ full_name }}</code></td><td>ФИО (именительный)</td><td>Иванов Иван Иванович</td></tr>
-            <tr><td><code>{{ full_name_genitive }}</code></td><td>ФИО (родительный)</td><td>Иванова Ивана Ивановича</td></tr>
-            <tr><td><code>{{ full_name_dative }}</code></td><td>ФИО (дательный)</td><td>Иванову Ивану Ивановичу</td></tr>
-            <tr><td><code>{{ full_name_accusative }}</code></td><td>ФИО (винительный)</td><td>Иванова Ивана Ивановича</td></tr>
-            <tr><td><code>{{ full_name_instrumental }}</code></td><td>ФИО (творительный)</td><td>Ивановым Иваном Ивановичем</td></tr>
-            <tr><td><code>{{ initials }}</code></td><td>Инициалы после фамилии</td><td>Иванов И.И.</td></tr>
-            <tr><td><code>{{ initials_before }}</code></td><td>Инициалы перед фамилией</td><td>И.И. Иванов</td></tr>
             <tr><td><code>{{ position }}</code></td><td>Должность</td><td>Администратор суда</td></tr>
-            <tr><td><code>{{ workplace }}</code></td><td>Место работы</td><td>Ленинский районный суд</td></tr>
-            <tr><td><code>{{ region }}</code></td><td>Регион</td><td>Иркутская область</td></tr>
+            <tr><td><code>{{ court_name }}</code></td><td>Наименование суда</td><td>Ленинский районный суд г. Иркутска</td></tr>
+            <tr><td><code>{{ workplace }}</code></td><td>Место работы (синоним court_name)</td><td>Ленинский районный суд</td></tr>
+            <tr><td><code>{{ region }}</code></td><td>Регион / субъект РФ</td><td>Иркутская область</td></tr>
+        </table>
+        
+        <h3>🔤 Склонение ФИО</h3>
+        <table>
+            <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
+            <tr><td><code>{{ full_name_genitive }}</code></td><td>ФИО (родительный — кого?)</td><td>Иванова Ивана Ивановича</td></tr>
+            <tr><td><code>{{ full_name_dative }}</code></td><td>ФИО (дательный — кому?)</td><td>Иванову Ивану Ивановичу</td></tr>
+            <tr><td><code>{{ full_name_accusative }}</code></td><td>ФИО (винительный — кого?)</td><td>Иванова Ивана Ивановича</td></tr>
+            <tr><td><code>{{ full_name_instrumental }}</code></td><td>ФИО (творительный — кем?)</td><td>Ивановым Иваном Ивановичем</td></tr>
+            <tr><td><code>{{ full_name_prepositional }}</code></td><td>ФИО (предложный — о ком?)</td><td>Иванове Иване Ивановиче</td></tr>
+            <tr><td><code>{{ initials }}</code></td><td>Фамилия И.О.</td><td>Иванов И.И.</td></tr>
+            <tr><td><code>{{ initials_before }}</code></td><td>И.О. Фамилия</td><td>И.И. Иванов</td></tr>
         </table>
         
         <h3>📞 Контактные данные слушателя</h3>
@@ -228,11 +246,22 @@ class TemplateHelpDialog(QDialog):
             <tr><td><code>{{ personal_data_consent }}</code></td><td>Согласие на обработку данных</td><td>Да / Нет</td></tr>
         </table>
         
+        <h3>👔 Исполнитель (подписант)</h3>
+        <table>
+            <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
+            <tr><td><code>{{ executor_name }}</code></td><td>ФИО исполнителя</td><td>Е.Ю. Рузавина</td></tr>
+            <tr><td><code>{{ executor_position }}</code></td><td>Должность исполнителя</td><td>Первый заместитель директора</td></tr>
+            <tr><td><code>{{ executor_initials }}</code></td><td>Инициалы исполнителя</td><td>Е.Ю. Рузавина</td></tr>
+        </table>
+        
         <h3>📆 Служебные переменные</h3>
         <table>
             <tr><th>Переменная</th><th>Описание</th><th>Пример</th></tr>
-            <tr><td><code>{{ current_date }}</code></td><td>Текущая дата</td><td>02.01.2026</td></tr>
+            <tr><td><code>{{ current_date }}</code></td><td>Текущая дата (ДД.ММ.ГГГГ)</td><td>02.01.2026</td></tr>
             <tr><td><code>{{ current_year }}</code></td><td>Текущий год</td><td>2026</td></tr>
+            <tr><td><code>{{ current_month }}</code></td><td>Текущий месяц (текстом)</td><td>января</td></tr>
+            <tr><td><code>{{ current_day }}</code></td><td>Текущий день</td><td>02</td></tr>
+            <tr><td><code>{{ generation_datetime }}</code></td><td>Дата и время генерации</td><td>02.01.2026 14:30</td></tr>
             <tr><td><code>{{ listeners_count }}</code></td><td>Количество слушателей</td><td>15</td></tr>
         </table>
         """)

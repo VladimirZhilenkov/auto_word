@@ -10,6 +10,7 @@ from .backup_dialog import BackupDialog
 from .database_config_dialog import DatabaseConfigDialog
 from .journal_entry_dialog import JournalEntryDialog
 from .order_create_dialog import OrderCreateDialog
+from .order_edit_dialog import OrderEditDialog
 
 __all__ = [
     'ListenerFormDialog',
@@ -22,4 +23,5 @@ __all__ = [
     'DatabaseConfigDialog',
     'JournalEntryDialog',
     'OrderCreateDialog',
+    'OrderEditDialog',
 ]

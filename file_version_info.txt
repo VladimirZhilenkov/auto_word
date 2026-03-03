@@ -4,8 +4,8 @@
 # http://msdn.microsoft.com/en-us/library/ms646997.aspx
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2, 4, 2, 0),
-    prodvers=(2, 4, 2, 0),
+    filevers=(2, 5, 0, 0),
+    prodvers=(2, 5, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -21,12 +21,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'AutoWord'),
             StringStruct('FileDescription', 'Генератор документов Word — AutoWord Document Generator'),
-            StringStruct('FileVersion', '2.4.2.0'),
+            StringStruct('FileVersion', '2.5.0.0'),
             StringStruct('InternalName', 'DocumentGenerator'),
             StringStruct('LegalCopyright', 'Copyright (c) 2026 AutoWord. MIT License.'),
             StringStruct('OriginalFilename', 'DocumentGenerator.exe'),
             StringStruct('ProductName', 'AutoWord Document Generator'),
-            StringStruct('ProductVersion', '2.4.2'),
+            StringStruct('ProductVersion', '2.5.0'),
           ]
         )
       ]

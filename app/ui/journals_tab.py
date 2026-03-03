@@ -20,6 +20,7 @@ from ..database.connection import DatabaseSession
 from ..database.models import Program, ProgramListener, Listener
 from .dialogs.journal_entry_dialog import JournalEntryDialog
 from .dialogs.order_create_dialog import OrderCreateDialog
+from .dialogs.order_edit_dialog import OrderEditDialog
 from .dialogs.contract_create_dialog import ContractCreateDialog
 from .dialogs.contract_edit_dialog import ContractEditDialog
 from ..services.order_journal_service import OrderJournalService, ORDER_TYPE_LABELS
@@ -41,7 +42,7 @@ class JournalsTab(QWidget):
         self.order_tab = OrderJournalSubTab(parent=self)
         self.contract_tab = ContractJournalSubTab(parent=self)
 
-        self.tabs.addTab(self.order_tab, "Журнал приказов")
+        self.tabs.addTab(self.order_tab, "Редактирование приказа")
         self.tabs.addTab(self.contract_tab, "Журнал договоров")
 
         layout.addWidget(self.tabs)
@@ -125,7 +126,7 @@ class OrderJournalSubTab(QWidget):
         self.table_view.setSortingEnabled(False)  # Manual ordering newest first
         self.table_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table_view.customContextMenuRequested.connect(self._show_context_menu)
-        self.table_view.doubleClicked.connect(self._edit_selected)
+        self.table_view.doubleClicked.connect(self._edit_order)
 
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels([col[1] for col in self.COLUMNS])
@@ -154,7 +155,11 @@ class OrderJournalSubTab(QWidget):
         self.btn_add = QPushButton("Добавить запись вручную")
         self.btn_add.clicked.connect(self._add_entry)
 
-        self.btn_edit = QPushButton("Редактировать")
+        self.btn_edit_order = QPushButton("✏️ Редактировать приказ")
+        self.btn_edit_order.setStyleSheet("font-weight: bold;")
+        self.btn_edit_order.clicked.connect(self._edit_order)
+
+        self.btn_edit = QPushButton("Редактировать запись")
         self.btn_edit.clicked.connect(self._edit_selected)
 
         self.btn_delete = QPushButton("Удалить")
@@ -170,6 +175,7 @@ class OrderJournalSubTab(QWidget):
 
         button_layout.addWidget(self.btn_create_order)
         button_layout.addWidget(self.btn_add)
+        button_layout.addWidget(self.btn_edit_order)
         button_layout.addWidget(self.btn_edit)
         button_layout.addWidget(self.btn_delete)
         button_layout.addWidget(self.btn_export)
@@ -181,7 +187,12 @@ class OrderJournalSubTab(QWidget):
 
     def _setup_context_menu(self):
         self.context_menu = QMenu(self)
-        action_edit = QAction("Редактировать", self)
+
+        action_edit_order = QAction("✏️ Редактировать приказ", self)
+        action_edit_order.triggered.connect(self._edit_order)
+        self.context_menu.addAction(action_edit_order)
+
+        action_edit = QAction("Редактировать запись", self)
         action_edit.triggered.connect(self._edit_selected)
         self.context_menu.addAction(action_edit)
 
@@ -268,6 +279,25 @@ class OrderJournalSubTab(QWidget):
         dialog = OrderCreateDialog(parent=self)
         dialog.exec_()
         # Refresh after dialog closes (even if cancelled, in case order was created)
+        self.refresh_data()
+
+    def _edit_order(self):
+        """Open full order editing dialog with template preview and listener management."""
+        entry_id = self._get_selected_id()
+        if entry_id is None:
+            QMessageBox.information(self, "Информация", "Выберите приказ для редактирования")
+            return
+
+        entry_dict = None
+        for e in self._entries:
+            if e['id'] == entry_id:
+                entry_dict = e
+                break
+        if not entry_dict:
+            return
+
+        dialog = OrderEditDialog(parent=self, entry=entry_dict)
+        dialog.exec_()
         self.refresh_data()
 
     def _edit_selected(self):

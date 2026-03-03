@@ -33,6 +33,14 @@ echo.
 echo Building executable...
 pyinstaller build_windows.spec --clean
 
+REM Create update zip for GitHub Release
+cd dist\DocumentGenerator
+if exist ..\..\AutoWord.zip del ..\..\AutoWord.zip
+powershell -Command "Compress-Archive -Path * -DestinationPath ..\..\AutoWord.zip -Force"
+cd ..\..
+
+echo AutoWord.zip создан для релиза (без лишней вложенности)
+
 echo.
 echo === Build complete! ===
 echo Output folder: dist\DocumentGenerator\
