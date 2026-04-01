@@ -8,7 +8,7 @@ from PyQt5.QtCore import Qt, QSortFilterProxyModel
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableView, QPushButton,
     QLineEdit, QLabel, QMessageBox, QHeaderView, QAbstractItemView,
-    QMenu, QAction
+    QMenu, QAction, QFileDialog
 )
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
@@ -104,15 +104,19 @@ class ListenersTab(QWidget):
         self.btn_delete = QPushButton("Удалить")
         self.btn_delete.clicked.connect(self._delete_selected)
         
+        self.btn_export = QPushButton("Экспорт в Excel")
+        self.btn_export.clicked.connect(self.export_to_excel)
+
         self.btn_refresh = QPushButton("Обновить")
         self.btn_refresh.clicked.connect(self.refresh_data)
-        
+
         # Statistics label
         self.stats_label = QLabel("Всего: 0")
-        
+
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_edit)
         button_layout.addWidget(self.btn_delete)
+        button_layout.addWidget(self.btn_export)
         button_layout.addStretch()
         button_layout.addWidget(self.stats_label)
         button_layout.addWidget(self.btn_refresh)
@@ -379,3 +383,141 @@ class ListenersTab(QWidget):
     def get_all_listeners(self) -> List[Listener]:
         """Get all listeners."""
         return list(self._listeners)
+
+    def _get_visible_listeners(self) -> List[Listener]:
+        """Get listeners currently visible in the table (respecting search filter)."""
+        visible_ids = []
+        for row in range(self.proxy_model.rowCount()):
+            source_index = self.proxy_model.mapToSource(self.proxy_model.index(row, 0))
+            item = self.model.item(source_index.row(), 0)
+            if item:
+                listener_id = item.data(Qt.UserRole)
+                if listener_id:
+                    visible_ids.append(listener_id)
+        id_set = set(visible_ids)
+        return [l for l in self._listeners if l.id in id_set]
+
+    def export_to_excel(self):
+        """Export visible listeners to an Excel file."""
+        from pathlib import Path
+
+        listeners = self._get_visible_listeners()
+        if not listeners:
+            QMessageBox.information(
+                self, "Информация",
+                "Нет данных для экспорта"
+            )
+            return
+
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Сохранить список слушателей",
+            "Список слушателей.xlsx",
+            "Excel файлы (*.xlsx)"
+        )
+        if not output_path:
+            return
+
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Слушатели"
+
+            headers = [
+                ("№", 6),
+                ("Фамилия", 18),
+                ("Имя", 16),
+                ("Отчество", 18),
+                ("Дата рождения", 16),
+                ("Должность", 25),
+                ("Место работы", 30),
+                ("Субъект РФ", 20),
+                ("Мобильный телефон", 18),
+                ("Рабочий телефон", 18),
+                ("Email", 25),
+                ("Образование", 20),
+                ("СНИЛС", 16),
+                ("ИНН", 16),
+                ("Паспорт серия и номер", 20),
+                ("Паспорт дата выдачи", 18),
+                ("Паспорт выдан", 35),
+                ("Код подразделения", 16),
+                ("Адрес регистрации", 35),
+                ("Фактический адрес", 35),
+                ("Программа", 30),
+                ("Примечания", 25),
+            ]
+
+            thin = Side(style='thin')
+            border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            header_font = Font(bold=True)
+            header_align = Alignment(horizontal='center', wrap_text=True)
+            cell_align = Alignment(wrap_text=True, vertical='top')
+
+            # Write headers
+            for col_idx, (header, width) in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_idx, value=header)
+                cell.font = header_font
+                cell.alignment = header_align
+                cell.border = border
+                ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+            # Write data
+            for row_idx, listener in enumerate(listeners, start=2):
+                program_name = ""
+                if listener.programs:
+                    prog = listener.programs[0]
+                    program_name = prog.program_short_name or prog.program_name or ""
+
+                row_data = [
+                    row_idx - 1,
+                    listener.last_name or "",
+                    listener.first_name or "",
+                    listener.middle_name or "",
+                    listener.birth_date.strftime('%d.%m.%Y') if listener.birth_date else "",
+                    listener.position or "",
+                    listener.workplace or "",
+                    listener.region or "",
+                    listener.mobile_phone or "",
+                    listener.work_phone or "",
+                    listener.email or "",
+                    listener.education or "",
+                    listener.snils or "",
+                    listener.inn or "",
+                    listener.passport_series_number or "",
+                    listener.passport_issue_date.strftime('%d.%m.%Y') if listener.passport_issue_date else "",
+                    listener.passport_issued_by or "",
+                    listener.passport_department_code or "",
+                    listener.registration_address or "",
+                    listener.actual_address or "",
+                    program_name,
+                    listener.notes or "",
+                ]
+
+                for col_idx, val in enumerate(row_data, 1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                    cell.alignment = cell_align
+                    cell.border = border
+
+            # Freeze header row
+            ws.freeze_panes = 'A2'
+            # Add autofilter
+            ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(listeners) + 1}"
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            wb.save(output_path)
+
+            QMessageBox.information(
+                self, "Экспорт завершен",
+                f"Экспортировано слушателей: {len(listeners)}\n\nФайл: {output_path}"
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Ошибка",
+                f"Ошибка экспорта: {e}"
+            )

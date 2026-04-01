@@ -136,6 +136,13 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.action_generate_order)
         file_menu.addSeparator()
         
+        # Export listeners action
+        action_export_listeners = QAction("Экспорт слушателей в Excel", self)
+        action_export_listeners.setShortcut(QKeySequence("Ctrl+E"))
+        action_export_listeners.setStatusTip("Экспортировать список слушателей в Excel")
+        action_export_listeners.triggered.connect(self._export_listeners)
+        file_menu.addAction(action_export_listeners)
+
         # Export journals action
         action_export_journals = QAction("Экспорт журналов", self)
         action_export_journals.triggered.connect(self._export_journals)
@@ -293,6 +300,10 @@ class MainWindow(QMainWindow):
         self.journals_tab.refresh_data()
         self.statusbar.showMessage("Данные обновлены")
     
+    def _export_listeners(self):
+        """Export listeners list to Excel."""
+        self.listeners_tab.export_to_excel()
+
     def _export_journals(self):
         """Switch to Journals tab and trigger export."""
         self.tab_widget.setCurrentWidget(self.journals_tab)
