@@ -133,6 +133,7 @@ def _run_migrations(engine: Engine):
         # ProgramListener table columns
         ("program_listeners", "order_number", "INTEGER"),
         ("program_listeners", "enrollment_date", "DATE"),
+        ("program_listeners", "grade_info", "VARCHAR(100)"),
     ]
     
     with engine.connect() as conn:

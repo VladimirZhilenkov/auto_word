@@ -80,16 +80,19 @@ class DocumentGenerator:
         if not self.templates_dir.exists():
             return []
         
-        templates = []
-        for pattern in ['*.docx', '*.DOCX']:
-            templates.extend(self.templates_dir.glob(pattern))
-        
-        # Filter out temporary files
-        templates = [
-            t.name for t in templates 
-            if not t.name.startswith('~$')
-        ]
-        
+        seen: set = set()
+        templates: List[str] = []
+        for pattern in ('*.docx', '*.DOCX'):
+            for t in self.templates_dir.glob(pattern):
+                name = t.name
+                key = name.lower()
+                if key in seen:
+                    continue
+                if name.startswith('~$') or name.startswith('._'):
+                    continue
+                seen.add(key)
+                templates.append(name)
+
         return sorted(templates)
     
     def generate_for_listener(
@@ -303,7 +306,11 @@ class DocumentGenerator:
         if program_data:
             context['program_name'] = program_data.get('program_name') or ''
             context['program_short_name'] = program_data.get('program_short_name') or ''
-            context['training_basis'] = program_data.get('training_basis') or ''
+            basis = program_data.get('training_basis') or ''
+            basis_instr = self._decline_phrase(basis, 'instrumental')
+            context['training_basis'] = basis
+            context['training_basis_instrumental'] = basis_instr
+            context['training_basis_phrase'] = f"в соответствии с {basis_instr}" if basis_instr else ''
             context['training_period'] = program_data.get('training_period') or ''
             context['program_volume'] = program_data.get('program_volume') or ''
             context['education_form'] = program_data.get('education_form') or ''
@@ -431,11 +438,21 @@ class DocumentGenerator:
             enriched.setdefault('contract_date', '')
             enriched_listeners.append(enriched)
 
-        # Enrich listeners with contract data from ContractJournal
+        # Enrich listeners with contract data from ContractJournal; also pull training_basis and grade_info
         program_id = (custom_context or {}).get('program_id')
         if program_id:
             try:
                 with DatabaseSession() as session:
+                    program_obj = session.query(Program).get(program_id)
+                    if program_obj and program_obj.training_basis:
+                        basis = program_obj.training_basis
+                        basis_instr = self._decline_phrase(basis, 'instrumental')
+                        context.setdefault('training_basis', basis)
+                        context.setdefault('training_basis_instrumental', basis_instr)
+                        context.setdefault(
+                            'training_basis_phrase',
+                            f"в соответствии с {basis_instr}" if basis_instr else ''
+                        )
                     for el in enriched_listeners:
                         lid = el.get('id')
                         if lid:
@@ -449,6 +466,11 @@ class DocumentGenerator:
                                     contract.contract_date.strftime('%d.%m.%Y')
                                     if contract.contract_date else ''
                                 )
+                            pl = session.query(ProgramListener).filter(
+                                ProgramListener.listener_id == lid,
+                                ProgramListener.program_id == program_id,
+                            ).first()
+                            el['grade_info'] = (pl.grade_info if pl else None) or ''
             except Exception:
                 pass  # If lookup fails, leave defaults
 
@@ -858,12 +880,23 @@ class DocumentGenerator:
         
         return context
     
+    def _decline_phrase(self, phrase: str, case: str) -> str:
+        """Decline each word of a phrase to the given case."""
+        if not phrase:
+            return ''
+        words = phrase.split()
+        return ' '.join(self.declension.decline_word(w, case) for w in words)
+
     def _prepare_program_context(self, program: Program) -> Dict[str, Any]:
         """Prepare program-specific context."""
+        basis = program.training_basis or ''
+        basis_instr = self._decline_phrase(basis, 'instrumental')
         return {
             'program_name': program.program_name or '',
             'program_short_name': program.program_short_name or '',
-            'training_basis': program.training_basis or '',
+            'training_basis': basis,
+            'training_basis_instrumental': basis_instr,
+            'training_basis_phrase': f"в соответствии с {basis_instr}" if basis_instr else '',
             'training_period': program.training_period or '',
             'program_volume': program.program_volume or '',
             'education_form': program.education_form or '',

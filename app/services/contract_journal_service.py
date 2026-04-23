@@ -194,10 +194,19 @@ class ContractJournalService:
         """Return list of available contract template files."""
         if not self.templates_dir.exists():
             return []
-        templates = []
-        for pattern in ["*.docx", "*.DOCX"]:
-            templates.extend(self.templates_dir.glob(pattern))
-        return sorted([t.name for t in templates if not t.name.startswith(("~$", "._"))])
+        seen: set = set()
+        templates: List[str] = []
+        for pattern in ("*.docx", "*.DOCX"):
+            for t in self.templates_dir.glob(pattern):
+                name = t.name
+                key = name.lower()
+                if key in seen:
+                    continue
+                if name.startswith(("~$", "._")):
+                    continue
+                seen.add(key)
+                templates.append(name)
+        return sorted(templates)
 
     # ------------------------------------------------------------------
     # Core CRUD
@@ -662,6 +671,11 @@ class ContractJournalService:
 
         # Программа
         if program:
+            basis = program.training_basis or ""
+            basis_words = basis.split() if basis else []
+            basis_instr = " ".join(
+                self.declension.decline_word(w, "instrumental") for w in basis_words
+            ) if basis_words else ""
             ctx.update(
                 {
                     "program_name": program.program_name or "",
@@ -672,18 +686,24 @@ class ContractJournalService:
                     "education_form": program.education_form or "",
                     "education_format": program.education_format or "",
                     "expulsion_date": program.expulsion_date.strftime("%d.%m.%Y") if program.expulsion_date else "",
+                    "training_basis": basis,
+                    "training_basis_instrumental": basis_instr,
+                    "training_basis_phrase": f"в соответствии с {basis_instr}" if basis_instr else "",
                 }
             )
         else:
             ctx.update({
-                "program_name": "", 
+                "program_name": "",
                 "program_short_name": "",
-                "program_volume": "", 
+                "program_volume": "",
                 "training_period": "",
                 "training_duration": "",
                 "education_form": "",
                 "education_format": "",
                 "expulsion_date": "",
+                "training_basis": "",
+                "training_basis_instrumental": "",
+                "training_basis_phrase": "",
             })
 
         return ctx

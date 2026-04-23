@@ -42,7 +42,8 @@ class ProgramListener(Base):
     )
     order_number: Mapped[Optional[int]] = mapped_column(Integer)  # № п/п в документе
     enrollment_date: Mapped[Optional[date]] = mapped_column(Date)  # Дата зачисления
-    
+    grade_info: Mapped[Optional[str]] = mapped_column(String(100))  # "баллы/процент%" (импорт из XLSX)
+
     # Relationships
     program: Mapped["Program"] = relationship(back_populates="listener_associations")
     listener: Mapped["Listener"] = relationship(back_populates="program_associations")
@@ -378,3 +379,42 @@ class ContractJournal(Base):
 
     def __repr__(self):
         return f"<ContractJournal(number={self.contract_number}, listener={self.listener_full_name})>"
+
+
+class StatementJournal(Base):
+    """
+    Журнал ведомостей и протоколов (Ведомости ИА/ПА, Протоколы ИА).
+    Один строка — один документ на одного слушателя (или групповой, если listener_id=NULL).
+    """
+
+    __tablename__ = 'statement_journal'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    entry_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    entry_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    listener_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('listeners.id', ondelete='SET NULL')
+    )
+    program_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('programs.id', ondelete='SET NULL')
+    )
+
+    listener_full_name: Mapped[Optional[str]] = mapped_column(String(255))
+    program_name: Mapped[Optional[str]] = mapped_column(String(500))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    document_path: Mapped[Optional[str]] = mapped_column(String(500))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    listener: Mapped[Optional["Listener"]] = relationship(backref="statements")
+    program: Mapped[Optional["Program"]] = relationship(backref="statements")
+
+    __table_args__ = (
+        UniqueConstraint('kind', 'entry_number', name='uix_statement_kind_number'),
+        Index('ix_statement_journal_kind_date', 'kind', 'entry_date'),
+    )
+
+    def __repr__(self):
+        return f"<StatementJournal(kind={self.kind}, number={self.entry_number}, listener={self.listener_full_name})>"

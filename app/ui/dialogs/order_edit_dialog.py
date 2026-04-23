@@ -308,6 +308,9 @@ VARIABLE_REFERENCE = {
         {"var": "end_date", "desc": "Дата окончания обучения", "example": "25 января 2026 г."},
         {"var": "training_period", "desc": "Период обучения (текст)", "example": "20.01.2026 - 25.01.2026"},
         {"var": "training_duration", "desc": "Продолжительность обучения", "example": "6 дней"},
+        {"var": "training_basis", "desc": "Основание обучения (именительный)", "example": "государственный контракт"},
+        {"var": "training_basis_instrumental", "desc": "Основание обучения (творительный падеж)", "example": "государственным контрактом"},
+        {"var": "training_basis_phrase", "desc": "Основание обучения — готовая фраза", "example": "в соответствии с государственным контрактом"},
         {"var": "listeners_count", "desc": "Количество слушателей", "example": "15"},
     ],
     "👥 Слушатель (в таблице, с циклом)": [
@@ -322,6 +325,7 @@ VARIABLE_REFERENCE = {
         {"var": "listener.order_number", "desc": "Порядковый номер слушателя", "example": "1"},
         {"var": "listener.contract_number", "desc": "Номер договора слушателя", "example": "42"},
         {"var": "listener.contract_date", "desc": "Дата договора слушателя", "example": "15.01.2026"},
+        {"var": "listener.grade_info", "desc": "Оценка слушателя (баллы/процент %)", "example": "14,00/93%"},
         {"var": "listener.notes", "desc": "Примечание слушателя", "example": ""},
     ],
     "👤 Слушатель (индивидуальный, именительный)": [
@@ -631,11 +635,11 @@ class OrderEditDialog(QDialog):
         details_group = QGroupBox("Реквизиты приказа")
         details_form = QFormLayout(details_group)
 
+        # Hidden combo_order_type (kept off-UI so journal_type persists without user selection)
         self.combo_order_type = QComboBox()
         for key, name in ORDER_TYPE_LABELS.items():
             self.combo_order_type.addItem(name, key)
-        self.combo_order_type.currentIndexChanged.connect(self._on_type_changed)
-        details_form.addRow("Тип:", self.combo_order_type)
+        self.combo_order_type.hide()
 
         number_layout = QVBoxLayout()
         self.edit_order_number = QLineEdit()
@@ -878,10 +882,10 @@ class OrderEditDialog(QDialog):
         self.combo_program.blockSignals(False)
 
     def _load_templates(self):
-        """Load available templates into combobox."""
+        """Load available templates into combobox (manual selection only)."""
         self.combo_template.blockSignals(True)
         self.combo_template.clear()
-        self.combo_template.addItem("-- Авто (по типу приказа) --", None)
+        self.combo_template.addItem("-- Выберите шаблон --", None)
         templates = self.generator.get_available_templates()
         for tpl in templates:
             self.combo_template.addItem(tpl, tpl)
@@ -922,9 +926,6 @@ class OrderEditDialog(QDialog):
             pidx = self.combo_program.findData(pid)
             if pidx >= 0:
                 self.combo_program.setCurrentIndex(pidx)
-
-        # Auto-select template by order type
-        self._select_template_by_type(jtype)
 
         # Load listeners
         self._load_program_listeners()
@@ -971,14 +972,6 @@ class OrderEditDialog(QDialog):
             # Fallback: put everything into name field
             self.edit_executor.setText(executor_raw)
 
-    def _select_template_by_type(self, order_type: str):
-        """Try to select the matching template for the order type."""
-        tpl_name = self.generator.TEMPLATE_TYPES.get(order_type)
-        if tpl_name:
-            idx = self.combo_template.findData(tpl_name)
-            if idx >= 0:
-                self.combo_template.setCurrentIndex(idx)
-
     # ------------------------------------------------------------------
     # Template preview & editor
     # ------------------------------------------------------------------
@@ -992,13 +985,8 @@ class OrderEditDialog(QDialog):
         """Update the preview tab with the template preview."""
         tpl_name = self.combo_template.currentData()
         if not tpl_name:
-            # Auto-select by order type
-            order_type = self.combo_order_type.currentData()
-            tpl_name = self.generator.TEMPLATE_TYPES.get(order_type)
-
-        if not tpl_name:
             self.template_browser.setHtml(
-                "<p style='color:gray;'>Выберите шаблон или тип приказа для предпросмотра</p>"
+                "<p style='color:gray;'>Выберите шаблон для предпросмотра</p>"
             )
             self.label_variables.setText("")
             return
@@ -1039,12 +1027,8 @@ class OrderEditDialog(QDialog):
         self.template_editor.setPlainText(text)
 
     def _resolve_current_template_name(self) -> Optional[str]:
-        """Get current template name (from combo or auto by order type)."""
-        tpl_name = self.combo_template.currentData()
-        if not tpl_name:
-            order_type = self.combo_order_type.currentData()
-            tpl_name = self.generator.TEMPLATE_TYPES.get(order_type)
-        return tpl_name
+        """Get current template name from combo (manual selection only)."""
+        return self.combo_template.currentData()
 
     # ------------------------------------------------------------------
     # Variable categories & quick insert
@@ -1307,13 +1291,6 @@ class OrderEditDialog(QDialog):
         # Refresh templates list and preview
         self._load_templates()
         self._update_template_preview()
-
-    def _on_type_changed(self):
-        """When order type changes, update template and number hint."""
-        order_type = self.combo_order_type.currentData()
-        if order_type:
-            self._select_template_by_type(order_type)
-            self._update_template_preview()
 
     # ------------------------------------------------------------------
     # Program & listeners
@@ -1603,7 +1580,15 @@ class OrderEditDialog(QDialog):
         if reply != QMessageBox.Yes:
             return
 
-        order_type = self.combo_order_type.currentData()
+        selected_template = self.combo_template.currentData()
+        if not selected_template:
+            QMessageBox.warning(self, "Предупреждение", "Выберите шаблон приказа")
+            return
+
+        # Derive journal_type from template filename (fallback: keep original from entry)
+        reverse = {v: k for k, v in self.generator.TEMPLATE_TYPES.items()}
+        derived_type = reverse.get(selected_template)
+        order_type = derived_type or self.combo_order_type.currentData() or 'enrollment'
         order_type_label = ORDER_TYPE_LABELS.get(order_type, '')
         order_date = self.edit_order_date.date().toPyDate()
         start_date = self.edit_start_date.date().toPyDate()
@@ -1630,9 +1615,6 @@ class OrderEditDialog(QDialog):
         executor_position = self.combo_executor_position.currentText().strip()
         executor_name = self.edit_executor.text().strip()
         executor_full = f"{executor_position} {executor_name}".strip() if executor_position else executor_name
-
-        # Determine template
-        selected_template = self.combo_template.currentData()  # None = auto
 
         QApplication.processEvents()
         self.btn_regenerate.setEnabled(False)

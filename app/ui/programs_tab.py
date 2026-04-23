@@ -103,17 +103,22 @@ class ProgramsTab(QWidget):
         
         self.btn_manage_listeners = QPushButton("Управление слушателями")
         self.btn_manage_listeners.clicked.connect(self._manage_listeners)
-        
+
+        self.btn_import_grades = QPushButton("📊 Импорт оценок")
+        self.btn_import_grades.setToolTip("Импортировать оценки слушателей из XLSX")
+        self.btn_import_grades.clicked.connect(self._import_grades)
+
         self.btn_refresh = QPushButton("Обновить")
         self.btn_refresh.clicked.connect(self.refresh_data)
-        
+
         # Statistics label
         self.stats_label = QLabel("Всего: 0")
-        
+
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_edit)
         button_layout.addWidget(self.btn_delete)
         button_layout.addWidget(self.btn_manage_listeners)
+        button_layout.addWidget(self.btn_import_grades)
         button_layout.addStretch()
         button_layout.addWidget(self.stats_label)
         button_layout.addWidget(self.btn_refresh)
@@ -311,17 +316,24 @@ class ProgramsTab(QWidget):
                     f"Ошибка удаления: {e}"
                 )
     
+    def _import_grades(self):
+        """Open dialog to import grades from XLSX into the selected program."""
+        program_id = self._get_selected_id()
+        from .dialogs import GradesImportDialog
+        dialog = GradesImportDialog(parent=self, preselect_program_id=program_id)
+        dialog.exec_()
+
     def _manage_listeners(self):
         """Open dialog to manage listeners for the selected program."""
         program_id = self._get_selected_id()
-        
+
         if program_id is None:
             QMessageBox.information(
                 self, "Информация",
                 "Выберите программу для управления слушателями"
             )
             return
-        
+
         from .dialogs import ProgramListenersDialog
         
         try:

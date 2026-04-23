@@ -79,6 +79,7 @@ listener_data.xlsx
 docx_files/
 templates
 13-01-2026_11-14-14/
+temp_for_dev
 
 # Temporary files
 *.tmp

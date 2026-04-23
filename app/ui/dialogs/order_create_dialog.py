@@ -51,18 +51,6 @@ class OrderCreateDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Order type selection
-        type_group = QGroupBox("Тип приказа")
-        type_layout = QFormLayout(type_group)
-
-        self.combo_order_type = QComboBox()
-        for key, name in ORDER_TYPE_LABELS.items():
-            self.combo_order_type.addItem(name, key)
-        self.combo_order_type.currentIndexChanged.connect(self._update_next_number)
-        type_layout.addRow("Тип:", self.combo_order_type)
-
-        layout.addWidget(type_group)
-
         # Order details
         details_group = QGroupBox("Реквизиты приказа")
         details_layout = QFormLayout(details_group)
@@ -412,13 +400,26 @@ class OrderCreateDialog(QDialog):
                     continue
 
     def _load_templates(self):
-        """Load available .docx templates into combobox."""
+        """Load available .docx templates into combobox (manual selection only)."""
         self.combo_template.clear()
-        # First item: auto-select by order type
-        self.combo_template.addItem("-- Автоматически по типу приказа --", None)
+        self.combo_template.addItem("-- Выберите шаблон --", None)
         templates = self.generator.get_available_templates()
         for tpl in templates:
             self.combo_template.addItem(tpl, tpl)
+        try:
+            self.combo_template.currentIndexChanged.disconnect(self._update_next_number)
+        except TypeError:
+            pass
+        self.combo_template.currentIndexChanged.connect(self._update_next_number)
+
+    def _resolve_order_type(self) -> str:
+        """Derive order_type (for journal registration) from selected template filename."""
+        template_name = self.combo_template.currentData()
+        if template_name:
+            reverse = {v: k for k, v in self.generator.TEMPLATE_TYPES.items()}
+            if template_name in reverse:
+                return reverse[template_name]
+        return 'enrollment'
 
     def _open_templates_folder(self):
         """Open the templates folder in file manager."""
@@ -435,10 +436,8 @@ class OrderCreateDialog(QDialog):
             QMessageBox.warning(self, "Ошибка", f"Не удалось открыть папку: {exc}")
 
     def _update_next_number(self):
-        """Fetch and display next order number."""
-        order_type = self.combo_order_type.currentData()
-        if not order_type:
-            return
+        """Fetch and display next order number (based on template-derived type)."""
+        order_type = self._resolve_order_type()
         try:
             next_num = self.journal_service.get_next_order_number(order_type)
             self.label_number_hint.setText(f"Следующий свободный номер: №{next_num}")
@@ -496,7 +495,12 @@ class OrderCreateDialog(QDialog):
             QMessageBox.warning(self, "Предупреждение", "Выберите программу обучения")
             return
 
-        order_type = self.combo_order_type.currentData()
+        selected_template = self.combo_template.currentData()
+        if not selected_template:
+            QMessageBox.warning(self, "Предупреждение", "Выберите шаблон приказа")
+            return
+
+        order_type = self._resolve_order_type()
         order_type_label = ORDER_TYPE_LABELS.get(order_type, '')
 
         order_date = self.edit_order_date.date().toPyDate()
@@ -522,9 +526,6 @@ class OrderCreateDialog(QDialog):
         QApplication.processEvents()
 
         self.btn_generate.setEnabled(False)
-
-        # Determine template
-        selected_template = self.combo_template.currentData()  # None = auto
 
         # Collect extra context from new fields
         education_form = self.combo_education_form.currentData() or ''

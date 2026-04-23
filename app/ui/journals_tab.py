@@ -25,6 +25,7 @@ from .dialogs.contract_create_dialog import ContractCreateDialog
 from .dialogs.contract_edit_dialog import ContractEditDialog
 from ..services.order_journal_service import OrderJournalService, ORDER_TYPE_LABELS
 from ..services.contract_journal_service import ContractJournalService
+from .statement_journal_subtab import StatementJournalSubTab
 
 
 class JournalsTab(QWidget):
@@ -41,15 +42,24 @@ class JournalsTab(QWidget):
         self.tabs = QTabWidget()
         self.order_tab = OrderJournalSubTab(parent=self)
         self.contract_tab = ContractJournalSubTab(parent=self)
+        self.vedomost_ia_tab = StatementJournalSubTab(kind='vedomost_ia', parent=self)
+        self.vedomost_pa_tab = StatementJournalSubTab(kind='vedomost_pa', parent=self)
+        self.protokol_ia_tab = StatementJournalSubTab(kind='protokol_ia', parent=self)
 
-        self.tabs.addTab(self.order_tab, "Редактирование приказа")
+        self.tabs.addTab(self.order_tab, "Журнал приказов по ЛС")
         self.tabs.addTab(self.contract_tab, "Журнал договоров")
+        self.tabs.addTab(self.vedomost_ia_tab, "Ведомости ИА")
+        self.tabs.addTab(self.vedomost_pa_tab, "Ведомости ПА")
+        self.tabs.addTab(self.protokol_ia_tab, "Протоколы ИА")
 
         layout.addWidget(self.tabs)
 
     def refresh_data(self):
         self.order_tab.refresh_data()
         self.contract_tab.refresh_data()
+        self.vedomost_ia_tab.refresh_data()
+        self.vedomost_pa_tab.refresh_data()
+        self.protokol_ia_tab.refresh_data()
 
 
 class OrderJournalSubTab(QWidget):
@@ -78,11 +88,11 @@ class OrderJournalSubTab(QWidget):
         filter_group = QGroupBox("Фильтры")
         filter_layout = QFormLayout(filter_group)
 
-        # Journal type combobox
+        # Journal type combobox (default: show all)
         self.combo_journal_type = QComboBox()
+        self.combo_journal_type.addItem("Все журналы", None)
         for key, label in ORDER_TYPE_LABELS.items():
             self.combo_journal_type.addItem(label, key)
-        filter_layout.addRow("Тип журнала:", self.combo_journal_type)
 
         # Period
         period_layout = QHBoxLayout()
@@ -247,15 +257,6 @@ class OrderJournalSubTab(QWidget):
             item = QStandardItem(text)
             item.setEditable(False)
             item.setData(entry['id'], Qt.UserRole)
-
-            # Highlight today / last week
-            od = entry.get('order_date')
-            if od:
-                delta = (date.today() - od).days
-                if delta == 0:
-                    item.setBackground(QBrush(QColor(200, 255, 200)))
-                elif 0 < delta <= 7:
-                    item.setBackground(QBrush(QColor(255, 255, 200)))
             row.append(item)
         self.model.appendRow(row)
 
